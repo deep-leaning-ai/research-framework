@@ -157,7 +157,6 @@ $RECYCLE.BIN/
 
 # Project specific
 # Data files
-data/
 *.csv
 *.h5
 *.hdf5
