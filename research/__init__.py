@@ -18,92 +18,190 @@ __author__ = 'KTB AI Research Team'
 # Core Components (기존 ktb_dl_research API 유지)
 # ============================================================================
 
-from .core.experiment import Experiment
-from .core.base_model import BaseModel
-from .models.pretrained.registry import ModelRegistry
+try:
+    from .core.experiment import Experiment
+except ImportError:
+    Experiment = None
+
+try:
+    from .core.base_model import BaseModel
+except ImportError:
+    BaseModel = None
+
+try:
+    from .models.pretrained.registry import ModelRegistry
+except ImportError:
+    ModelRegistry = None
 
 # ============================================================================
 # Pretrained Models (전이학습용)
 # ============================================================================
 
-from .models.pretrained.resnet import ResNetModel
-from .models.pretrained.vgg import VGGModel
+try:
+    from .models.pretrained.resnet import ResNetModel
+except ImportError:
+    ResNetModel = None
+
+try:
+    from .models.pretrained.vgg import VGGModel
+except ImportError:
+    VGGModel = None
 
 # ============================================================================
 # Simple Models (ml_framework에서 추가)
 # ============================================================================
 
-from .models.simple.base import BaseModel as SimpleBaseModel
-from .models.simple.cnn import CNN
-from .models.simple.fully_connected import FullyConnectedNN
+try:
+    from .models.simple.base import BaseModel as SimpleBaseModel
+except ImportError:
+    SimpleBaseModel = None
+
+try:
+    from .models.simple.cnn import CNN
+except ImportError:
+    CNN = None
+
+try:
+    from .models.simple.fully_connected import FullyConnectedNN
+except ImportError:
+    FullyConnectedNN = None
 
 # ============================================================================
 # Data Modules
 # ============================================================================
 
-from .data.cifar10 import CIFAR10DataModule
-from .data.loaders import DataLoaderFactory
+try:
+    from .data.cifar10 import CIFAR10DataModule
+except ImportError:
+    CIFAR10DataModule = None
+
+try:
+    from .data.loaders import DataLoaderFactory
+except ImportError:
+    DataLoaderFactory = None
 
 # ============================================================================
 # Training & Logging Strategies (기존 유지)
 # ============================================================================
 
-from .strategies.training.vanilla_strategy import VanillaTrainingStrategy
-from .strategies.logging.simple_strategy import SimpleLoggingStrategy
-from .strategies.logging.wandb_strategy import WandBLoggingStrategy
+try:
+    from .strategies.training.vanilla_strategy import VanillaTrainingStrategy
+except ImportError:
+    VanillaTrainingStrategy = None
+
+try:
+    from .strategies.logging.simple_strategy import SimpleLoggingStrategy
+except ImportError:
+    SimpleLoggingStrategy = None
+
+try:
+    from .strategies.logging.wandb_strategy import WandBLoggingStrategy
+except ImportError:
+    WandBLoggingStrategy = None
 
 # ============================================================================
 # Task Strategies (ml_framework에서 추가)
 # ============================================================================
 
-from .strategies.task.base import TaskStrategy
-from .strategies.task.task_strategies import (
-    MultiClassStrategy,
-    BinaryClassificationStrategy,
-    RegressionStrategy
-)
+try:
+    from .strategies.task.base import TaskStrategy
+except ImportError:
+    TaskStrategy = None
+
+try:
+    from .strategies.task.task_strategies import (
+        MultiClassStrategy,
+        BinaryClassificationStrategy,
+        RegressionStrategy
+    )
+except ImportError:
+    MultiClassStrategy = None
+    BinaryClassificationStrategy = None
+    RegressionStrategy = None
 
 # ============================================================================
 # Metrics System (ml_framework의 고급 메트릭 시스템)
 # ============================================================================
 
-from .metrics.base import MetricCalculator
-from .metrics.classification import (
-    AccuracyMetric,
-    PrecisionMetric,
-    RecallMetric,
-    F1ScoreMetric
-)
-from .metrics.regression import (
-    MSEMetric,
-    MAEMetric
-)
-from .metrics.tracker import MetricTracker
+try:
+    from .metrics.base import MetricCalculator
+except ImportError:
+    MetricCalculator = None
+
+try:
+    from .metrics.classification import (
+        AccuracyMetric,
+        PrecisionMetric,
+        RecallMetric,
+        F1ScoreMetric
+    )
+except ImportError:
+    AccuracyMetric = None
+    PrecisionMetric = None
+    RecallMetric = None
+    F1ScoreMetric = None
+
+try:
+    from .metrics.regression import (
+        MSEMetric,
+        MAEMetric
+    )
+except ImportError:
+    MSEMetric = None
+    MAEMetric = None
+
+try:
+    from .metrics.tracker import MetricTracker
+except ImportError:
+    MetricTracker = None
 
 # ============================================================================
 # Experiment Tools (ml_framework에서 추가)
 # ============================================================================
 
-from .experiment.runner import ExperimentRunner
-from .experiment.result import ExperimentResult
-from .experiment.recorder import ExperimentRecorder
+try:
+    from .experiment.runner import ExperimentRunner
+except ImportError:
+    ExperimentRunner = None
+
+try:
+    from .experiment.result import ExperimentResult
+except ImportError:
+    ExperimentResult = None
+
+try:
+    from .experiment.recorder import ExperimentRecorder
+except ImportError:
+    ExperimentRecorder = None
 
 # ============================================================================
 # Comparison System (ml_framework의 강화된 비교 시스템)
 # ============================================================================
 
-from .comparison.manager import ComparisonManager
-from .comparison.comparators import (
-    PerformanceComparator,
-    EfficiencyComparator,
-    SpeedComparator
-)
+try:
+    from .comparison.manager import ComparisonManager
+except ImportError:
+    ComparisonManager = None
+
+try:
+    from .comparison.comparators import (
+        PerformanceComparator,
+        EfficiencyComparator,
+        SpeedComparator
+    )
+except ImportError:
+    PerformanceComparator = None
+    EfficiencyComparator = None
+    SpeedComparator = None
 
 # ============================================================================
 # Visualization (통합 시각화 도구)
 # ============================================================================
 
-from .visualization.visualizer import ExperimentVisualizer
+try:
+    from .visualization.visualizer import ExperimentVisualizer
+except ImportError:
+    ExperimentVisualizer = None
 
 # ============================================================================
 # Analysis Tools (기존 ktb_dl_research 분석 도구 유지)
@@ -147,7 +245,8 @@ except ImportError:
 # Public API
 # ============================================================================
 
-__all__ = [
+# Dynamically build __all__ list - only include successfully imported modules
+_all_exports = [
     # Core
     'Experiment',
     'BaseModel',
@@ -213,6 +312,9 @@ __all__ = [
     'ModelAnalyzer',
     'PerformanceAnalyzer',
 ]
+
+# Filter out None values (failed imports)
+__all__ = [name for name in _all_exports if globals().get(name) is not None]
 
 # ============================================================================
 # Utility Functions
