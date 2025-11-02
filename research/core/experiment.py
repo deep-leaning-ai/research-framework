@@ -42,6 +42,7 @@ class Experiment:
         Args:
             config: 실험 설정 딕셔너리
                 - num_classes: 클래스 수
+                - in_channels: 입력 채널 수 (기본값 3=RGB, 1=Grayscale/Mel-Spectrogram)
                 - learning_rate: 학습률
                 - max_epochs: 최대 에폭
                 - batch_size: 배치 크기
@@ -75,7 +76,8 @@ class Experiment:
         # 모델 생성
         self.model = ModelRegistry.create(
             model_name,
-            num_classes=self.config.get('num_classes', 10)
+            num_classes=self.config.get('num_classes', 10),
+            in_channels=self.config.get('in_channels', 3)
         )
 
         self.data_module = data_module
@@ -216,7 +218,8 @@ class Experiment:
 
                 self.model = ModelRegistry.create(
                     model_name,
-                    num_classes=self.config.get('num_classes', 10)
+                    num_classes=self.config.get('num_classes', 10),
+                    in_channels=self.config.get('in_channels', 3)
                 )
 
             # 실험 실행
