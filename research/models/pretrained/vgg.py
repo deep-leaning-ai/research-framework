@@ -37,7 +37,32 @@ class VGGModel(BaseModel):
         model.unfreeze_all()
     """
 
-    def __init__(self, variant: str = 'vgg16', num_classes: int = 10, pretrained: bool = True, in_channels: int = 3):
+    # Model variants - avoid hardcoding
+    SUPPORTED_VARIANTS = [
+        'vgg11', 'vgg11_bn', 'vgg13', 'vgg13_bn',
+        'vgg16', 'vgg16_bn', 'vgg19', 'vgg19_bn'
+    ]
+    DEFAULT_VARIANT = 'vgg16'
+
+    # Input configuration
+    DEFAULT_NUM_CLASSES = 10
+    DEFAULT_IN_CHANNELS = 3
+    VALID_IN_CHANNELS = [1, 3, 4]
+
+    # Architecture constants
+    CLASSIFIER_FC_INDEX = 6  # classifier[6]이 마지막 Linear
+    FEATURES_FIRST_CONV_INDEX = 0
+
+    # Block configuration
+    MIN_BLOCKS = 1
+    MAX_BLOCKS = 5
+
+    # Channel dimension for averaging RGB to grayscale
+    RGB_TO_GRAY_DIM = 1
+    KEEPDIM_TRUE = True
+    CONV_BIAS = False
+
+    def __init__(self, variant: str = None, num_classes: int = None, pretrained: bool = True, in_channels: int = None):
         """
         Args:
             variant: VGG 변형 (vgg11, vgg13, vgg16, vgg19, *_bn)
@@ -45,8 +70,9 @@ class VGGModel(BaseModel):
             pretrained: 사전학습 가중치 사용 여부
             in_channels: 입력 채널 수 (기본값 3=RGB, 1=Grayscale/Mel-Spectrogram 등)
         """
-        self.variant = variant
-        self.in_channels = in_channels
+        self.variant = variant or self.DEFAULT_VARIANT
+        self.in_channels = in_channels or self.DEFAULT_IN_CHANNELS
+        num_classes = num_classes or self.DEFAULT_NUM_CLASSES
         super().__init__(num_classes=num_classes, pretrained=pretrained)
 
     def _load_pretrained(self) -> nn.Module:
@@ -79,27 +105,29 @@ class VGGModel(BaseModel):
             model = model_fn(weights=None)
             print(f"Initialized {self.variant} (random weights)")
 
-        # 입력 채널 수가 3이 아닐 경우 첫 번째 conv 레이어 수정
-        if self.in_channels != 3:
+        # 입력 채널 수가 DEFAULT_IN_CHANNELS이 아닐 경우 첫 번째 conv 레이어 수정
+        if self.in_channels != self.DEFAULT_IN_CHANNELS:
             import torch
-            # VGG의 첫 번째 레이어는 features[0]
-            original_conv1 = model.features[0]
+            # VGG의 첫 번째 레이어는 features[FEATURES_FIRST_CONV_INDEX]
+            original_conv1 = model.features[self.FEATURES_FIRST_CONV_INDEX]
             original_weight = original_conv1.weight.data.clone()
 
             # 새로운 첫 번째 conv 레이어 생성
-            model.features[0] = nn.Conv2d(
+            model.features[self.FEATURES_FIRST_CONV_INDEX] = nn.Conv2d(
                 self.in_channels,
                 original_conv1.out_channels,
                 kernel_size=original_conv1.kernel_size,
                 stride=original_conv1.stride,
                 padding=original_conv1.padding,
-                bias=False
+                bias=self.CONV_BIAS
             )
 
             # Pretrained weights 재사용 (가능한 경우)
-            if self.pretrained and self.in_channels == 1:
+            if self.pretrained and self.in_channels == self.VALID_IN_CHANNELS[0]:  # 1 channel
                 # RGB 3채널을 평균 내서 1채널로 변환
-                model.features[0].weight.data = original_weight.mean(dim=1, keepdim=True)
+                model.features[self.FEATURES_FIRST_CONV_INDEX].weight.data = original_weight.mean(
+                    dim=self.RGB_TO_GRAY_DIM, keepdim=self.KEEPDIM_TRUE
+                )
                 print(f"First conv modified: {self.in_channels} channel input (pretrained weights averaged)")
             else:
                 print(f"First conv modified: {self.in_channels} channel input (random weights)")
@@ -108,15 +136,15 @@ class VGGModel(BaseModel):
 
     def _modify_classifier(self):
         """분류기를 num_classes에 맞게 수정"""
-        # VGG의 classifier는 Sequential이고, 마지막 레이어는 인덱스 6
+        # VGG의 classifier는 Sequential이고, 마지막 레이어는 인덱스 CLASSIFIER_FC_INDEX
         # classifier: [0] Linear(25088, 4096), [1] ReLU, [2] Dropout,
         #            [3] Linear(4096, 4096), [4] ReLU, [5] Dropout,
         #            [6] Linear(4096, 1000) <- 이걸 수정
 
-        in_features = self.model.classifier[6].in_features
-        self.model.classifier[6] = nn.Linear(in_features, self.num_classes)
+        in_features = self.model.classifier[self.CLASSIFIER_FC_INDEX].in_features
+        self.model.classifier[self.CLASSIFIER_FC_INDEX] = nn.Linear(in_features, self.num_classes)
 
-        print(f"[OK] Classifier modified: classifier[6]({in_features} → {self.num_classes})")
+        print(f"[OK] Classifier modified: classifier[{self.CLASSIFIER_FC_INDEX}]({in_features} → {self.num_classes})")
 
     def get_backbone_params(self):
         """백본 파라미터 반환 (features 부분)"""
@@ -161,13 +189,13 @@ class VGGModel(BaseModel):
         Features의 마지막 N개 블록만 해제
 
         Args:
-            num_blocks: 해제할 블록 수 (1-5)
+            num_blocks: 해제할 블록 수 (MIN_BLOCKS-MAX_BLOCKS)
         """
         # VGG16 features는 총 31개 레이어 (MaxPool 포함)
         # Block 구분: MaxPool로 구분 가능
 
-        if not 1 <= num_blocks <= 5:
-            raise ValueError(f"num_blocks must be 1-5, got {num_blocks}")
+        if not self.MIN_BLOCKS <= num_blocks <= self.MAX_BLOCKS:
+            raise ValueError(f"num_blocks must be {self.MIN_BLOCKS}-{self.MAX_BLOCKS}, got {num_blocks}")
 
         # 모두 동결
         self.freeze_all()

@@ -1,6 +1,28 @@
 """
-ModelRegistry: Factory 패턴을 사용한 모델 등록 및 생성
-데코레이터를 사용하여 자동으로 모델을 등록하고, 이름으로 모델을 생성
+ModelRegistry: Factory + Registry 패턴을 사용한 모델 관리 시스템
+
+데코레이터를 사용하여 자동으로 모델을 등록하고, 이름으로 모델을 생성합니다.
+현재 13개의 사전학습 모델이 등록되어 있습니다.
+
+주요 기능:
+    - 데코레이터 기반 자동 모델 등록
+    - 문자열 이름으로 모델 인스턴스 생성
+    - 등록된 모델 목록 조회
+    - 모델 존재 여부 확인
+
+사용 예시:
+    >>> from research.models.pretrained.registry import ModelRegistry
+    >>>
+    >>> # 모델 생성
+    >>> model = ModelRegistry.create('resnet50', num_classes=10, in_channels=3)
+    >>>
+    >>> # 사용 가능한 모델 목록
+    >>> models = ModelRegistry.list_models()
+    >>> print(f"Available models: {models}")
+    >>>
+    >>> # 모델 등록 확인
+    >>> if ModelRegistry.is_registered('resnet50'):
+    >>>     print("ResNet50 is available")
 """
 from typing import Dict, Type, Any
 from ...core.base_model import BaseModel
@@ -8,22 +30,44 @@ from ...core.base_model import BaseModel
 
 class ModelRegistry:
     """
-    모델 레지스트리 (Factory Pattern)
+    모델 레지스트리 (Factory + Registry Pattern)
 
-    사용법:
-        # 모델 등록 (데코레이터 사용)
-        @ModelRegistry.register('resnet50')
-        class ResNetModel(BaseModel):
-            ...
+    이 클래스는 Factory 패턴과 Registry 패턴을 결합하여
+    모델의 등록과 생성을 중앙에서 관리합니다.
 
-        # 모델 생성
-        model = ModelRegistry.create('resnet50', num_classes=10)
+    Attributes:
+        _models (Dict[str, Type[BaseModel]]): 등록된 모델 클래스 저장소
 
-        # 등록된 모델 목록 확인
-        print(ModelRegistry.list_models())
+    Class Methods:
+        register(name, **kwargs): 데코레이터로 모델 등록
+        create(name, **kwargs): 이름으로 모델 인스턴스 생성
+        list_models(): 등록된 모든 모델 이름 반환
+        is_registered(name): 모델 등록 여부 확인
+        get_model_info(name): 모델 정보 반환
+        unregister(name): 모델 등록 해제
+        clear(): 모든 모델 등록 해제
+
+    등록된 모델:
+        - ResNet: resnet18, resnet34, resnet50, resnet101, resnet152
+        - VGG: vgg11, vgg11_bn, vgg13, vgg13_bn, vgg16, vgg16_bn, vgg19, vgg19_bn
     """
 
+    # Registry storage
     _models: Dict[str, Type[BaseModel]] = {}
+
+    # Error messages - avoid hardcoding
+    ERROR_NOT_REGISTERED = "Model '{name}' not registered. Available models: {available}"
+    ERROR_ALREADY_REGISTERED = "Warning: Model '{name}' already registered. Overwriting..."
+
+    # Success messages
+    SUCCESS_UNREGISTER = "[OK] Model '{name}' unregistered"
+    SUCCESS_CLEAR = "[OK] All models cleared from registry"
+
+    # Warning messages
+    WARNING_NOT_FOUND = "Warning: Model '{name}' not found in registry"
+
+    # Separator for model list
+    MODEL_LIST_SEPARATOR = ", "
 
     @classmethod
     def register(cls, name: str, **default_kwargs):
@@ -39,7 +83,7 @@ class ModelRegistry:
         """
         def decorator(model_class: Type[BaseModel]):
             if name in cls._models:
-                print(f"Warning: Model '{name}' already registered. Overwriting...")
+                print(cls.ERROR_ALREADY_REGISTERED.format(name=name))
 
             # 기본 kwargs를 저장
             cls._models[name] = (model_class, default_kwargs)
@@ -65,16 +109,18 @@ class ModelRegistry:
             ValueError: 등록되지 않은 모델 이름
         """
         if name not in cls._models:
-            available = ", ".join(cls._models.keys())
+            available = cls.MODEL_LIST_SEPARATOR.join(cls._models.keys())
             raise ValueError(
-                f"Model '{name}' not registered. "
-                f"Available models: {available}"
+                cls.ERROR_NOT_REGISTERED.format(name=name, available=available)
             )
 
         model_class, default_kwargs = cls._models[name]
 
         # 기본 kwargs와 사용자 kwargs 병합 (사용자 kwargs가 우선)
         merged_kwargs = {**default_kwargs, **kwargs}
+
+        # variant는 레지스트리에서만 사용하므로 제거
+        merged_kwargs.pop('variant', None)
 
         return model_class(**merged_kwargs)
 
@@ -133,12 +179,12 @@ class ModelRegistry:
         """
         if name in cls._models:
             del cls._models[name]
-            print(f"[OK] Model '{name}' unregistered")
+            print(cls.SUCCESS_UNREGISTER.format(name=name))
         else:
-            print(f"Warning: Model '{name}' not found in registry")
+            print(cls.WARNING_NOT_FOUND.format(name=name))
 
     @classmethod
     def clear(cls):
         """모든 모델 등록 해제 (테스트용)"""
         cls._models.clear()
-        print("[OK] All models cleared from registry")
+        print(cls.SUCCESS_CLEAR)

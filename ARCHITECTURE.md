@@ -12,8 +12,6 @@ KTB ML Framework는 전이학습(Transfer Learning)과 일반 ML 태스크를 �
 - **고급 메트릭**: 다중 메트릭 동시 추적 및 히스토리 관리
 - **강력한 비교**: 성능, 효율성, 속도 기준 모델 비교
 - **종합 시각화**: 8-panel 차트를 통한 실험 결과 분석
-- **완전한 테스트**: 53개 테스트, 100% 통과율
-- **100% 하위 호환성**: 기존 ktb_dl_research API 완전 지원
 
 ---
 
@@ -127,6 +125,7 @@ model = ModelRegistry.create('resnet50', num_classes=10)
 
 **예시:**
 ```python
+
 class BaseModel:
     def _initialize_model(self):  # 템플릿 메서드
         self.model = self._load_pretrained()
@@ -246,13 +245,6 @@ research/
 │   ├── cifar10.py        # CIFAR-10 DataModule
 │   └── loaders.py        # 범용 DataLoader 유틸
 │
-├── utils/                # 유틸리티
-│   ├── __init__.py
-│   └── helpers.py        # 헬퍼 함수들
-│
-└── compat/               # 하위 호환성
-    ├── __init__.py
-    └── legacy.py         # 레거시 API 지원
 ```
 
 ---
@@ -396,20 +388,6 @@ manager.export_comparison_report('report.txt')
 
 ## 테스트 인프라
 
-### 테스트 구조
-
-```
-tests/
-├── conftest.py          # pytest fixtures
-├── pytest.ini           # pytest 설정
-├── unit/               # 단위 테스트 (66개)
-│   ├── test_metrics.py (34 tests)
-│   ├── test_task_strategies.py (15 tests)
-│   └── test_comparators.py (17 tests)
-└── integration/        # 통합 테스트 (7개)
-    └── test_end_to_end.py (7 tests)
-```
-
 ### Fixtures
 
 - `device`: CPU/GPU 자동 선택
@@ -518,27 +496,6 @@ strategy = VanillaTrainingStrategy(device='cuda')
 - Pretrained 모델 캐싱
 - 메트릭 계산 벡터화
 - 시각화 지연 로딩
-
----
-
-## 마이그레이션 가이드
-
-### 기존 ktb_dl_research에서 마이그레이션
-
-**Before:**
-```python
-from ktb_dl_research import Experiment, ResNetModel
-```
-
-**After (권장):**
-```python
-from research import Experiment, ResNetModel
-```
-
-**하위 호환성:**
-- 기존 코드 수정 불필요
-- 모든 API 동일하게 작동
-- 새로운 기능 추가로 사용 가능
 
 ---
 

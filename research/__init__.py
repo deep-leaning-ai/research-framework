@@ -133,22 +133,28 @@ try:
         AccuracyMetric,
         PrecisionMetric,
         RecallMetric,
-        F1ScoreMetric
+        F1ScoreMetric,
+        Top5AccuracyMetric,
+        AUCMetric
     )
 except ImportError:
     AccuracyMetric = None
     PrecisionMetric = None
     RecallMetric = None
     F1ScoreMetric = None
+    Top5AccuracyMetric = None
+    AUCMetric = None
 
 try:
     from .metrics.regression import (
         MSEMetric,
-        MAEMetric
+        MAEMetric,
+        R2Metric
     )
 except ImportError:
     MSEMetric = None
     MAEMetric = None
+    R2Metric = None
 
 try:
     from .metrics.tracker import MetricTracker
@@ -204,41 +210,12 @@ except ImportError:
     ExperimentVisualizer = None
 
 # ============================================================================
-# Analysis Tools (기존 ktb_dl_research 분석 도구 유지)
+# Analysis Tools removed - Legacy code is no longer supported
+# Use new metrics, comparison, and visualization systems instead:
+# - metrics: research.metrics.*
+# - comparison: research.comparison.*
+# - visualization: research.visualization.*
 # ============================================================================
-
-# 기존 visualizer 함수들 import (legacy 지원)
-try:
-    from .analysis.visualizer import (
-        visualize_samples,
-        plot_confusion_matrix,
-        plot_comprehensive_comparison,
-        plot_accuracy_improvement
-    )
-except ImportError:
-    # visualizer가 없으면 스킵
-    visualize_samples = None
-    plot_confusion_matrix = None
-    plot_comprehensive_comparison = None
-    plot_accuracy_improvement = None
-
-try:
-    from .analysis.metrics import calculate_metrics
-except ImportError:
-    calculate_metrics = None
-
-try:
-    from .analysis.comparator import ModelComparator
-except ImportError:
-    ModelComparator = None
-
-# ml_framework 분석 도구
-try:
-    from .analysis.model_analyzer import ModelAnalyzer
-    from .analysis.performance import PerformanceAnalyzer
-except ImportError:
-    ModelAnalyzer = None
-    PerformanceAnalyzer = None
 
 
 # ============================================================================
@@ -282,8 +259,11 @@ _all_exports = [
     'PrecisionMetric',
     'RecallMetric',
     'F1ScoreMetric',
+    'Top5AccuracyMetric',
+    'AUCMetric',
     'MSEMetric',
     'MAEMetric',
+    'R2Metric',
     'MetricTracker',
 
     # Experiment Tools
@@ -299,18 +279,6 @@ _all_exports = [
 
     # Visualization
     'ExperimentVisualizer',
-
-    # Analysis (Legacy from ktb_dl_research)
-    'ModelComparator',
-    'visualize_samples',
-    'plot_confusion_matrix',
-    'plot_comprehensive_comparison',
-    'plot_accuracy_improvement',
-    'calculate_metrics',
-
-    # Analysis (from ml_framework)
-    'ModelAnalyzer',
-    'PerformanceAnalyzer',
 ]
 
 # Filter out None values (failed imports)

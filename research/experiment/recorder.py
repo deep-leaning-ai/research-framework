@@ -1,9 +1,16 @@
 """
 실험 결과 기록 및 관리
 SRP: 실험 결과 기록만 담당
+
+개선사항:
+- 메모리 관리: 최대 결과 수 제한
+- 버전 관리: 동일 모델명 처리
+- 자동 저장: 설정 시 자동 저장
 """
 
-from typing import Dict, Optional
+import warnings
+from typing import Dict, Optional, List
+from collections import OrderedDict
 from research.experiment.result import ExperimentResult
 
 
@@ -12,11 +19,36 @@ class ExperimentRecorder:
     실험 결과 기록 및 관리 클래스
 
     여러 모델의 실험 결과를 저장하고 관리
+
+    개선사항:
+    - 최대 결과 수 제한으로 메모리 관리
+    - 버전 관리로 동일 모델명 처리
+    - 자동 저장 옵션
     """
 
-    def __init__(self):
-        """실험 기록기 초기화"""
-        self.results: Dict[str, ExperimentResult] = {}
+    # 클래스 상수
+    DEFAULT_MAX_RESULTS = 100
+    AUTO_SAVE_INTERVAL = 10
+
+    def __init__(
+        self,
+        max_results: Optional[int] = None,
+        auto_save_path: Optional[str] = None,
+        allow_duplicate_names: bool = True
+    ):
+        """
+        실험 기록기 초기화
+
+        Args:
+            max_results: 최대 결과 수 (None=무제한, 기본값: 100)
+            auto_save_path: 자동 저장 경로 (None=자동 저장 안함)
+            allow_duplicate_names: 동일 모델명 허용 여부
+        """
+        self.results: OrderedDict[str, ExperimentResult] = OrderedDict()
+        self.max_results = max_results if max_results is not None else self.DEFAULT_MAX_RESULTS
+        self.auto_save_path = auto_save_path
+        self.allow_duplicate_names = allow_duplicate_names
+        self.result_count = 0
 
     def add_result(self, result: ExperimentResult):
         """
@@ -24,8 +56,56 @@ class ExperimentRecorder:
 
         Args:
             result: 추가할 실험 결과
+
+        메모리 관리:
+        - max_results 도달시 가장 오래된 결과 삭제 (FIFO)
+        - 버전 관리: 동일 모델명 처리
+
+        자동 저장:
+        - AUTO_SAVE_INTERVAL마다 자동 저장
         """
-        self.results[result.model_name] = result
+        model_name = result.model_name
+
+        # 버전 관리: 동일 모델명 처리
+        if model_name in self.results:
+            if not self.allow_duplicate_names:
+                warnings.warn(
+                    f"Model '{model_name}' already exists. Overwriting previous result.",
+                    UserWarning
+                )
+            else:
+                # 버전 번호 추가
+                version = 1
+                versioned_name = f"{model_name}_v{version}"
+                while versioned_name in self.results:
+                    version += 1
+                    versioned_name = f"{model_name}_v{version}"
+                model_name = versioned_name
+                warnings.warn(
+                    f"Model '{result.model_name}' already exists. "
+                    f"Saving as '{model_name}'.",
+                    UserWarning
+                )
+
+        # 메모리 관리: 최대 결과 수 제한
+        if self.max_results > 0 and len(self.results) >= self.max_results:
+            # FIFO: 가장 오래된 결과 삭제
+            oldest_key = next(iter(self.results))
+            removed_result = self.results.pop(oldest_key)
+            warnings.warn(
+                f"Max results ({self.max_results}) reached. "
+                f"Removing oldest result: '{removed_result.model_name}'",
+                UserWarning
+            )
+
+        # 결과 추가
+        self.results[model_name] = result
+        self.result_count += 1
+
+        # 자동 저장
+        if self.auto_save_path and self.result_count % self.AUTO_SAVE_INTERVAL == 0:
+            self.save_to_file(self.auto_save_path)
+            print(f"Auto-saved results to '{self.auto_save_path}'")
 
     def get_result(self, model_name: str) -> Optional[ExperimentResult]:
         """

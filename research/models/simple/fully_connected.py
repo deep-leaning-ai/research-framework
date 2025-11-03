@@ -14,10 +14,18 @@ class FullyConnectedNN(BaseModel):
     3-layer Fully Connected 아키텍처
     """
 
+    # Architecture constants - avoid hardcoding
+    INPUT_SIZE = 784  # 28x28
+    DEFAULT_HIDDEN_SIZE = 128
+    DEFAULT_OUTPUT_DIM = 10
+
+    # Layer configuration
+    NUM_HIDDEN_LAYERS = 2
+
     def __init__(
         self,
-        hidden_size: int = 128,
-        output_dim: int = 10,
+        hidden_size: int = None,
+        output_dim: int = None,
         task_strategy: "TaskStrategy" = None,
     ):
         """
@@ -26,6 +34,10 @@ class FullyConnectedNN(BaseModel):
             output_dim: 출력 차원
             task_strategy: Task 전략
         """
+        # Use defaults if not provided
+        hidden_size = hidden_size or self.DEFAULT_HIDDEN_SIZE
+        output_dim = output_dim or self.DEFAULT_OUTPUT_DIM
+
         if task_strategy is None:
             from research.strategies import MultiClassStrategy
 
@@ -35,8 +47,8 @@ class FullyConnectedNN(BaseModel):
 
         self.hidden_size = hidden_size
 
-        # 28x28 = 784 input for MNIST
-        self.fc1 = nn.Linear(784, hidden_size)
+        # INPUT_SIZE input for MNIST (28x28 = 784)
+        self.fc1 = nn.Linear(self.INPUT_SIZE, hidden_size)
         self.relu1 = nn.ReLU()
 
         self.fc2 = nn.Linear(hidden_size, hidden_size)

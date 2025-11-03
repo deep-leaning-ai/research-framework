@@ -55,7 +55,15 @@ class EfficiencyComparator(ModelComparator):
     효율성 기반 비교
 
     파라미터 대비 성능 효율성 계산
+
+    공식: efficiency = performance / log₁₀(parameters + EPSILON)
+    - log₁₀: 파라미터 수의 영향을 감소시킴
+    - EPSILON: log(0) 방지 및 최소값 보장
     """
+
+    # 클래스 상수
+    LOG_BASE = 10
+    EPSILON = 1
 
     def __init__(self, metric_name: str):
         """
@@ -72,8 +80,12 @@ class EfficiencyComparator(ModelComparator):
             if self.metric_name in result.test_metrics:
                 best_metric = max(result.test_metrics[self.metric_name])
                 params = result.parameters
-                # 효율성 = 성능 / log(파라미터 수)
-                efficiency = best_metric / np.log10(params + 1) if params > 0 else 0
+                # 효율성 = 성능 / log₁₀(파라미터 수 + EPSILON)
+                efficiency = (
+                    best_metric / np.log10(params + self.EPSILON)
+                    if params > 0
+                    else 0
+                )
                 efficiency_scores[model_name] = {
                     "efficiency": efficiency,
                     "performance": best_metric,

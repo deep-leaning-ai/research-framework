@@ -28,11 +28,25 @@ class ComparisonManager:
         """
         self.comparators.append(comparator)
 
-    def run_all_comparisons(
+    def compare(
         self, results: Dict[str, "ExperimentResult"]
     ) -> Dict[str, Any]:
         """
         모든 등록된 비교 실행
+
+        Args:
+            results: 모델 실험 결과 딕셔너리
+
+        Returns:
+            모든 비교 결과를 담은 딕셔너리
+        """
+        return self.run_all_comparisons(results)
+
+    def run_all_comparisons(
+        self, results: Dict[str, "ExperimentResult"]
+    ) -> Dict[str, Any]:
+        """
+        모든 등록된 비교 실행 (compare의 실제 구현)
 
         Args:
             results: 모델 실험 결과 딕셔너리
@@ -126,3 +140,49 @@ class ComparisonManager:
         """비교기 및 결과 초기화"""
         self.comparators.clear()
         self.comparison_results.clear()
+
+    def generate_report(self, comparison_results: Dict[str, Any]) -> str:
+        """
+        비교 결과를 문자열 리포트로 생성
+
+        Args:
+            comparison_results: 비교 결과 딕셔너리
+
+        Returns:
+            리포트 문자열
+        """
+        report = []
+        report.append("=" * 70)
+        report.append("Model Comparison Report")
+        report.append("=" * 70)
+
+        for comparison_name, result in comparison_results.items():
+            report.append(f"\n{comparison_name}")
+            report.append("-" * 50)
+
+            if "rankings" in result:
+                report.append("Rankings:")
+                for item in result["rankings"]:
+                    if "model" in item and "score" in item:
+                        report.append(f"  - {item['model']}: {item['score']:.4f}")
+
+            if "best_model" in result:
+                report.append(f"Best Model: {result['best_model']}")
+
+        return "\n".join(report)
+
+    def print_summary(self, comparison_results: Dict[str, Any]):
+        """
+        비교 결과 요약 출력
+
+        Args:
+            comparison_results: 비교 결과 딕셔너리
+        """
+        print("\n" + "=" * 70)
+        print("Comparison Summary")
+        print("=" * 70)
+
+        for comparison_name, result in comparison_results.items():
+            print(f"\n{comparison_name}:")
+            if "best_model" in result:
+                print(f"  Best: {result['best_model']}")

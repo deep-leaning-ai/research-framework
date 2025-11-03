@@ -2,10 +2,14 @@
 실험 결과 시각화
 SRP: 시각화만 담당
 
+개선사항:
+- 색상 제한 해결: 10개 이상 모델 지원
+- 동적 색상 생성
 """
 
-from typing import List
+from typing import List, Dict, Tuple
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import numpy as np
 from research.experiment.recorder import ExperimentRecorder
 
@@ -14,7 +18,53 @@ class ExperimentVisualizer:
     """
     실험 결과 시각화 클래스
     다양한 형태의 차트로 실험 결과를 시각화
+
+    개선사항:
+    - 10개 이상 모델 지원: 동적 색상 생성
+    - 색상 품질: 구분 가능한 색상 자동 선택
     """
+
+    # 클래스 상수
+    DEFAULT_COLORMAP = 'tab10'  # 기본 10개
+    EXTENDED_COLORMAP = 'tab20'  # 확장 20개
+    MAX_TAB_COLORS = 20
+
+    @staticmethod
+    def _generate_color_palette(n_models: int) -> Dict[str, Tuple]:
+        """
+        모델 수에 맞는 색상 팔레트 생성
+
+        Args:
+            n_models: 모델 개수
+
+        Returns:
+            색상 딕셔너리
+
+        전략:
+        - 10개 이하: tab10 사용
+        - 20개 이하: tab20 사용
+        - 20개 초과: HSV 색상 공간에서 균등 분포 생성
+        """
+        if n_models <= 10:
+            # tab10 사용
+            cmap = plt.cm.get_cmap(ExperimentVisualizer.DEFAULT_COLORMAP)
+            colors = [cmap(i) for i in range(n_models)]
+        elif n_models <= 20:
+            # tab20 사용
+            cmap = plt.cm.get_cmap(ExperimentVisualizer.EXTENDED_COLORMAP)
+            colors = [cmap(i) for i in range(n_models)]
+        else:
+            # HSV 색상 공간에서 균등 분포 생성
+            colors = []
+            for i in range(n_models):
+                hue = i / n_models
+                # Saturation과 Value를 약간 변화시켜 구분성 향상
+                saturation = 0.7 + (i % 3) * 0.1  # 0.7, 0.8, 0.9 순환
+                value = 0.9 - (i % 2) * 0.1  # 0.9, 0.8 순환
+                rgb = mcolors.hsv_to_rgb([hue, saturation, value])
+                colors.append(tuple(rgb) + (1.0,))  # RGBA 형식
+
+        return colors
 
     @staticmethod
     def plot_comparison(
@@ -37,9 +87,16 @@ class ExperimentVisualizer:
         fig, axes = plt.subplots(2, 4, figsize=(24, 12))
         fig.suptitle("Model Comparison Results", fontsize=16, fontweight="bold")
 
-        # 색상 및 스타일 정의
+        # 색상 및 스타일 정의 (동적 색상 생성)
+        n_models = len(results)
+        colors = ExperimentVisualizer._generate_color_palette(n_models)
+        markers = ["o", "s", "^", "D", "v", "P", "*", "X", "h", "H"]
+
         model_styles = {
-            name: {"color": plt.cm.tab10(i), "marker": ["o", "s", "^", "D", "v"][i % 5]}
+            name: {
+                "color": colors[i],
+                "marker": markers[i % len(markers)]
+            }
             for i, name in enumerate(results.keys())
         }
 
@@ -332,8 +389,16 @@ class ExperimentVisualizer:
             f"Model Comparison - {metric_name}", fontsize=14, fontweight="bold"
         )
 
+        # 동적 색상 생성
+        n_models = len(results)
+        colors = ExperimentVisualizer._generate_color_palette(n_models)
+        markers = ["o", "s", "^", "D", "v", "P", "*", "X", "h", "H"]
+
         model_styles = {
-            name: {"color": plt.cm.tab10(i), "marker": ["o", "s", "^", "D"][i % 4]}
+            name: {
+                "color": colors[i],
+                "marker": markers[i % len(markers)]
+            }
             for i, name in enumerate(results.keys())
         }
 

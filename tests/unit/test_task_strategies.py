@@ -1,170 +1,318 @@
-"""
-Task Strategy Unit 테스트
+"""Unit tests for task strategies
+
+All tests follow the Given-When-Then pattern and avoid hardcoding.
 """
 
 import pytest
 import torch
 import torch.nn as nn
 
-from research import (
-    MultiClassStrategy,
-    BinaryClassificationStrategy,
-    RegressionStrategy,
-)
+# Test constants
+NUM_SAMPLES = 32
+NUM_CLASSES = 10
+PERFECT_ACCURACY = 1.0
+ZERO_ACCURACY = 0.0
+PERFECT_MSE = 0.0
+BINARY_THRESHOLD = 0.5
 
 
 @pytest.mark.unit
 class TestMultiClassStrategy:
-    """MultiClassStrategy 테스트"""
+    """MultiClassStrategy tests"""
 
-    def test_criterion_type(self):
-        """Criterion 타입 테스트"""
-        strategy = MultiClassStrategy(num_classes=10)
+    def test_get_criterion(self):
+        """Given: MultiClassStrategy
+        When: get_criterion() called
+        Then: Return CrossEntropyLoss"""
+        # Given
+        from research.strategies.task import MultiClassStrategy
+        strategy = MultiClassStrategy(num_classes=NUM_CLASSES)
+
+        # When
         criterion = strategy.get_criterion()
 
+        # Then
         assert isinstance(criterion, nn.CrossEntropyLoss)
 
-    def test_output_activation(self):
-        """Output activation 테스트"""
-        strategy = MultiClassStrategy(num_classes=10)
-        activation = strategy.get_output_activation()
+    def test_get_activation(self):
+        """Given: MultiClassStrategy
+        When: get_activation() called
+        Then: Return Softmax"""
+        # Given
+        from research.strategies.task import MultiClassStrategy
+        strategy = MultiClassStrategy(num_classes=NUM_CLASSES)
 
-        assert activation is None
+        # When
+        activation = strategy.get_activation()
 
-    def test_metric_calculation(self):
-        """메트릭 계산 테스트"""
-        strategy = MultiClassStrategy(num_classes=10)
+        # Then
+        assert isinstance(activation, nn.Softmax)
 
-        outputs = torch.randn(32, 10)
-        labels = torch.randint(0, 10, (32,))
+    def test_calculate_metric_perfect(self):
+        """Given: Perfect predictions
+        When: calculate_metric() called
+        Then: Return 1.0"""
+        # Given
+        from research.strategies.task import MultiClassStrategy
+        strategy = MultiClassStrategy(num_classes=NUM_CLASSES)
+        labels = torch.randint(0, NUM_CLASSES, (NUM_SAMPLES,))
+        outputs = torch.zeros(NUM_SAMPLES, NUM_CLASSES)
+        for i, label in enumerate(labels):
+            outputs[i, label] = 10.0  # High logit for correct class
 
-        metric = strategy.calculate_metric(outputs, labels)
+        # When
+        accuracy = strategy.calculate_metric(outputs, labels)
 
-        assert 0 <= metric <= 100
-
-    def test_metric_name(self):
-        """메트릭 이름 테스트"""
-        strategy = MultiClassStrategy(num_classes=10)
-
-        assert strategy.get_metric_name() == "Accuracy"
+        # Then
+        assert accuracy == PERFECT_ACCURACY
 
     def test_prepare_labels(self):
-        """레이블 준비 테스트"""
-        strategy = MultiClassStrategy(num_classes=10)
+        """Given: Label tensor
+        When: prepare_labels() called
+        Then: Return Long tensor"""
+        # Given
+        from research.strategies.task import MultiClassStrategy
+        strategy = MultiClassStrategy(num_classes=NUM_CLASSES)
+        labels = torch.randint(0, NUM_CLASSES, (NUM_SAMPLES,)).float()
 
-        labels = torch.randint(0, 10, (32,))
+        # When
         prepared = strategy.prepare_labels(labels)
 
-        assert torch.equal(labels, prepared)
+        # Then
+        assert prepared.dtype == torch.long
+
+    def test_get_task_type(self):
+        """Given: MultiClassStrategy
+        When: get_task_type() called
+        Then: Return 'multiclass'"""
+        # Given
+        from research.strategies.task import MultiClassStrategy
+        strategy = MultiClassStrategy(num_classes=NUM_CLASSES)
+
+        # When
+        task_type = strategy.get_task_type()
+
+        # Then
+        assert task_type == "multiclass"
 
 
 @pytest.mark.unit
 class TestBinaryClassificationStrategy:
-    """BinaryClassificationStrategy 테스트"""
+    """BinaryClassificationStrategy tests"""
 
-    def test_criterion_type(self):
-        """Criterion 타입 테스트"""
+    def test_get_criterion(self):
+        """Given: BinaryClassificationStrategy
+        When: get_criterion() called
+        Then: Return BCEWithLogitsLoss"""
+        # Given
+        from research.strategies.task import BinaryClassificationStrategy
         strategy = BinaryClassificationStrategy()
+
+        # When
         criterion = strategy.get_criterion()
 
+        # Then
         assert isinstance(criterion, nn.BCEWithLogitsLoss)
 
-    def test_output_activation(self):
-        """Output activation 테스트"""
+    def test_get_activation(self):
+        """Given: BinaryClassificationStrategy
+        When: get_activation() called
+        Then: Return Sigmoid"""
+        # Given
+        from research.strategies.task import BinaryClassificationStrategy
         strategy = BinaryClassificationStrategy()
-        activation = strategy.get_output_activation()
 
+        # When
+        activation = strategy.get_activation()
+
+        # Then
         assert isinstance(activation, nn.Sigmoid)
 
-    def test_metric_calculation(self):
-        """메트릭 계산 테스트"""
+    def test_calculate_metric_perfect(self):
+        """Given: Perfect predictions
+        When: calculate_metric() called
+        Then: Return 1.0"""
+        # Given
+        from research.strategies.task import BinaryClassificationStrategy
         strategy = BinaryClassificationStrategy()
+        labels = torch.randint(0, 2, (NUM_SAMPLES,)).float()
+        outputs = (labels * 10.0) - 5.0  # Positive logits for 1, negative for 0
 
-        outputs = torch.randn(32, 1)
-        labels = torch.randint(0, 2, (32, 1)).float()
+        # When
+        accuracy = strategy.calculate_metric(outputs, labels)
 
-        metric = strategy.calculate_metric(outputs, labels)
-
-        assert 0 <= metric <= 100
+        # Then
+        assert accuracy == PERFECT_ACCURACY
 
     def test_prepare_labels(self):
-        """레이블 준비 테스트"""
+        """Given: Label tensor
+        When: prepare_labels() called
+        Then: Return Float tensor"""
+        # Given
+        from research.strategies.task import BinaryClassificationStrategy
         strategy = BinaryClassificationStrategy()
+        labels = torch.randint(0, 2, (NUM_SAMPLES,))
 
-        labels = torch.randint(0, 2, (32,))
+        # When
         prepared = strategy.prepare_labels(labels)
 
-        assert prepared.shape == (32, 1)
+        # Then
         assert prepared.dtype == torch.float32
 
-    def test_loss_calculation(self):
-        """손실 계산 테스트"""
+    def test_threshold_constant(self):
+        """Given: BinaryClassificationStrategy
+        When: Check THRESHOLD constant
+        Then: Value is 0.5"""
+        # Given & When
+        from research.strategies.task import BinaryClassificationStrategy
+
+        # Then
+        assert BinaryClassificationStrategy.THRESHOLD == BINARY_THRESHOLD
+
+    def test_get_task_type(self):
+        """Given: BinaryClassificationStrategy
+        When: get_task_type() called
+        Then: Return 'binary'"""
+        # Given
+        from research.strategies.task import BinaryClassificationStrategy
         strategy = BinaryClassificationStrategy()
-        criterion = strategy.get_criterion()
 
-        outputs = torch.randn(32, 1)
-        labels = torch.randint(0, 2, (32,))
-        prepared_labels = strategy.prepare_labels(labels)
+        # When
+        task_type = strategy.get_task_type()
 
-        loss = criterion(outputs, prepared_labels)
-
-        assert loss.item() >= 0
+        # Then
+        assert task_type == "binary"
 
 
 @pytest.mark.unit
 class TestRegressionStrategy:
-    """RegressionStrategy 테스트"""
+    """RegressionStrategy tests"""
 
-    def test_criterion_type(self):
-        """Criterion 타입 테스트"""
+    def test_get_criterion(self):
+        """Given: RegressionStrategy
+        When: get_criterion() called
+        Then: Return MSELoss"""
+        # Given
+        from research.strategies.task import RegressionStrategy
         strategy = RegressionStrategy()
+
+        # When
         criterion = strategy.get_criterion()
 
+        # Then
         assert isinstance(criterion, nn.MSELoss)
 
-    def test_output_activation(self):
-        """Output activation 테스트"""
+    def test_get_activation(self):
+        """Given: RegressionStrategy
+        When: get_activation() called
+        Then: Return None"""
+        # Given
+        from research.strategies.task import RegressionStrategy
         strategy = RegressionStrategy()
-        activation = strategy.get_output_activation()
 
+        # When
+        activation = strategy.get_activation()
+
+        # Then
         assert activation is None
 
-    def test_metric_calculation(self):
-        """메트릭 계산 테스트"""
+    def test_calculate_metric_perfect(self):
+        """Given: Perfect predictions
+        When: calculate_metric() called
+        Then: Return 0.0 (MSE)"""
+        # Given
+        from research.strategies.task import RegressionStrategy
         strategy = RegressionStrategy()
+        labels = torch.randn(NUM_SAMPLES)
+        outputs = labels.clone()
 
-        outputs = torch.randn(32, 1)
-        labels = torch.randn(32, 1)
+        # When
+        mse = strategy.calculate_metric(outputs, labels)
 
-        metric = strategy.calculate_metric(outputs, labels)
-
-        assert metric >= 0
-
-    def test_metric_name(self):
-        """메트릭 이름 테스트"""
-        strategy = RegressionStrategy()
-
-        assert strategy.get_metric_name() == "MSE"
+        # Then
+        assert abs(mse - PERFECT_MSE) < 1e-6
 
     def test_prepare_labels(self):
-        """레이블 준비 테스트"""
+        """Given: Label tensor
+        When: prepare_labels() called
+        Then: Return Float tensor"""
+        # Given
+        from research.strategies.task import RegressionStrategy
         strategy = RegressionStrategy()
+        labels = torch.randint(0, 100, (NUM_SAMPLES,))
 
-        labels = torch.randn(32)
+        # When
         prepared = strategy.prepare_labels(labels)
 
-        assert prepared.shape == (32, 1)
+        # Then
         assert prepared.dtype == torch.float32
 
-    def test_loss_calculation(self):
-        """손실 계산 테스트"""
+    def test_get_task_type(self):
+        """Given: RegressionStrategy
+        When: get_task_type() called
+        Then: Return 'regression'"""
+        # Given
+        from research.strategies.task import RegressionStrategy
         strategy = RegressionStrategy()
-        criterion = strategy.get_criterion()
 
-        outputs = torch.randn(32, 1)
-        labels = torch.randn(32)
-        prepared_labels = strategy.prepare_labels(labels)
+        # When
+        task_type = strategy.get_task_type()
 
-        loss = criterion(outputs, prepared_labels)
+        # Then
+        assert task_type == "regression"
 
-        assert loss.item() >= 0
+
+@pytest.mark.unit
+class TestStrategyInterchangeability:
+    """Test strategy interchangeability (LSP)"""
+
+    def test_all_strategies_have_same_interface(self):
+        """Given: All task strategies
+        When: Check methods
+        Then: All have same interface"""
+        # Given
+        from research.strategies.task import (
+            MultiClassStrategy,
+            BinaryClassificationStrategy,
+            RegressionStrategy
+        )
+
+        strategies = [
+            MultiClassStrategy(num_classes=NUM_CLASSES),
+            BinaryClassificationStrategy(),
+            RegressionStrategy()
+        ]
+
+        # When & Then
+        for strategy in strategies:
+            assert hasattr(strategy, 'get_criterion')
+            assert hasattr(strategy, 'get_activation')
+            assert hasattr(strategy, 'calculate_metric')
+            assert hasattr(strategy, 'prepare_labels')
+            assert hasattr(strategy, 'get_task_type')
+
+    def test_strategies_polymorphism(self):
+        """Given: Strategy list
+        When: Call get_task_type() on each
+        Then: Return different task types"""
+        # Given
+        from research.strategies.task import (
+            MultiClassStrategy,
+            BinaryClassificationStrategy,
+            RegressionStrategy
+        )
+
+        strategies = [
+            MultiClassStrategy(num_classes=NUM_CLASSES),
+            BinaryClassificationStrategy(),
+            RegressionStrategy()
+        ]
+
+        # When
+        task_types = [s.get_task_type() for s in strategies]
+
+        # Then
+        assert "multiclass" in task_types
+        assert "binary" in task_types
+        assert "regression" in task_types
+        assert len(set(task_types)) == 3  # All unique

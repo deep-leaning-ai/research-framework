@@ -33,7 +33,31 @@ class ResNetModel(BaseModel):
         model.unfreeze_all()
     """
 
-    def __init__(self, variant: str = 'resnet50', num_classes: int = 10, pretrained: bool = True, in_channels: int = 3):
+    # Model variants - avoid hardcoding
+    SUPPORTED_VARIANTS = ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
+    DEFAULT_VARIANT = 'resnet50'
+
+    # Input configuration
+    DEFAULT_NUM_CLASSES = 10
+    DEFAULT_IN_CHANNELS = 3
+    VALID_IN_CHANNELS = [1, 3, 4]
+
+    # Architecture constants
+    CONV1_KERNEL_SIZE = 7
+    CONV1_STRIDE = 2
+    CONV1_PADDING = 3
+    CONV1_OUT_CHANNELS = 64
+    CONV1_BIAS = False
+
+    # Layer names
+    BACKBONE_PREFIX = 'fc'
+    LAYER_GROUPS = ['conv1', 'bn1', 'layer1', 'layer2', 'layer3', 'layer4', 'fc']
+
+    # Channel dimension for averaging RGB to grayscale
+    RGB_TO_GRAY_DIM = 1
+    KEEPDIM_TRUE = True
+
+    def __init__(self, variant: str = None, num_classes: int = None, pretrained: bool = True, in_channels: int = None):
         """
         Args:
             variant: ResNet 변형 (resnet18, resnet34, resnet50, resnet101, resnet152)
@@ -41,8 +65,9 @@ class ResNetModel(BaseModel):
             pretrained: 사전학습 가중치 사용 여부
             in_channels: 입력 채널 수 (기본값 3=RGB, 1=Grayscale/Mel-Spectrogram 등)
         """
-        self.variant = variant
-        self.in_channels = in_channels
+        self.variant = variant or self.DEFAULT_VARIANT
+        self.in_channels = in_channels or self.DEFAULT_IN_CHANNELS
+        num_classes = num_classes or self.DEFAULT_NUM_CLASSES
         super().__init__(num_classes=num_classes, pretrained=pretrained)
 
     def _load_pretrained(self) -> nn.Module:
@@ -72,21 +97,25 @@ class ResNetModel(BaseModel):
             model = model_fn(weights=None)
             print(f"Initialized {self.variant} (random weights)")
 
-        # 입력 채널 수가 3이 아닐 경우 conv1 레이어 수정
-        if self.in_channels != 3:
+        # 입력 채널 수가 DEFAULT_IN_CHANNELS이 아닐 경우 conv1 레이어 수정
+        if self.in_channels != self.DEFAULT_IN_CHANNELS:
             import torch
             original_conv1_weight = model.conv1.weight.data.clone()
 
             # 새로운 conv1 레이어 생성
             model.conv1 = nn.Conv2d(
-                self.in_channels, 64,
-                kernel_size=7, stride=2, padding=3, bias=False
+                self.in_channels,
+                self.CONV1_OUT_CHANNELS,
+                kernel_size=self.CONV1_KERNEL_SIZE,
+                stride=self.CONV1_STRIDE,
+                padding=self.CONV1_PADDING,
+                bias=self.CONV1_BIAS
             )
 
             # Pretrained weights 재사용 (가능한 경우)
-            if self.pretrained and self.in_channels == 1:
+            if self.pretrained and self.in_channels == self.VALID_IN_CHANNELS[0]:  # 1 channel
                 # RGB 3채널을 평균 내서 1채널로 변환
-                model.conv1.weight.data = original_conv1_weight.mean(dim=1, keepdim=True)
+                model.conv1.weight.data = original_conv1_weight.mean(dim=self.RGB_TO_GRAY_DIM, keepdim=self.KEEPDIM_TRUE)
                 print(f"Conv1 modified: {self.in_channels} channel input (pretrained weights averaged)")
             else:
                 print(f"Conv1 modified: {self.in_channels} channel input (random weights)")

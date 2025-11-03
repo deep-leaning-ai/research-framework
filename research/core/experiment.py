@@ -37,6 +37,21 @@ class Experiment:
         comparison = exp.compare_strategies(['feature_extraction', 'fine_tuning'])
     """
 
+    # 클래스 상수 - 기본 설정값
+    DEFAULT_MAX_EPOCHS = 100
+    DEFAULT_LEARNING_RATE = 1e-4
+    DEFAULT_BATCH_SIZE = 32
+    DEFAULT_OPTIMIZER = 'adam'
+    DEFAULT_NUM_CLASSES = 10
+    DEFAULT_IN_CHANNELS = 3
+
+    # Freeze 전략 매핑
+    FREEZE_STRATEGIES = {
+        'feature_extraction': 'freeze_backbone',
+        'fine_tuning': 'unfreeze_all',
+        'inference': 'freeze_all'
+    }
+
     def __init__(self, config: Dict[str, Any]):
         """
         Args:
@@ -50,12 +65,33 @@ class Experiment:
                 - 등...
         """
         self.config = config
-        self.model = None
+        self._model = None  # 캡슐화: 내부 속성으로 변경
+        self._model_name = None  # 모델 이름 저장 (리셋용)
+        self._initial_state = None  # 초기 상태 저장 (리셋용)
         self.data_module = None
         self.training_strategy = None
         self.logging_strategy = None
         self.results = {}
         self.experiment_history = []
+
+    @property
+    def model(self):
+        """모델 읽기 전용 접근"""
+        return self._model
+
+    def get_model_for_inference(self):
+        """추론용 모델 복사본 반환
+
+        Returns:
+            평가 모드로 설정된 모델 복사본
+        """
+        if self._model is None:
+            raise RuntimeError("No model available. Call setup() first.")
+
+        import copy
+        model_copy = copy.deepcopy(self._model)
+        model_copy.model.eval()
+        return model_copy
 
     def setup(
         self,
@@ -74,11 +110,16 @@ class Experiment:
             logging_strategy: 로깅 전략 (None이면 로깅 안함)
         """
         # 모델 생성
-        self.model = ModelRegistry.create(
+        self._model_name = model_name
+        self._model = ModelRegistry.create(
             model_name,
-            num_classes=self.config.get('num_classes', 10),
-            in_channels=self.config.get('in_channels', 3)
+            num_classes=self.config.get('num_classes', self.DEFAULT_NUM_CLASSES),
+            in_channels=self.config.get('in_channels', self.DEFAULT_IN_CHANNELS)
         )
+
+        # 초기 상태 저장 (deep copy를 위해 state_dict 사용)
+        import copy
+        self._initial_state = copy.deepcopy(self._model.model.state_dict())
 
         self.data_module = data_module
         self.training_strategy = training_strategy
@@ -209,18 +250,9 @@ class Experiment:
         comparison = {}
 
         for strategy in strategies:
-            # 모델 리셋 (새로 초기화)
+            # 모델 리셋 (초기 상태로 복원)
             if reset_model:
-                model_name = self.model.__class__.__name__
-                # ResNetModel → resnet50 형태로 추출
-                if 'variant' in self.model.__dict__:
-                    model_name = self.model.variant
-
-                self.model = ModelRegistry.create(
-                    model_name,
-                    num_classes=self.config.get('num_classes', 10),
-                    in_channels=self.config.get('in_channels', 3)
-                )
+                self._reset_model()
 
             # 실험 실행
             run_name = f"{strategy}_comparison"
@@ -231,6 +263,19 @@ class Experiment:
         self._print_comparison(comparison)
 
         return comparison
+
+    def _reset_model(self):
+        """모델을 초기 상태로 리셋
+
+        상태 딕셔너리를 사용하여 모델 구조는 유지하면서
+        가중치만 초기 상태로 복원합니다.
+        """
+        if self._initial_state is None:
+            raise RuntimeError("No initial state saved. Call setup() first.")
+
+        # 초기 상태로 가중치 복원
+        self._model.model.load_state_dict(self._initial_state)
+        print(f"[OK] Model reset to initial state")
 
     def _print_comparison(self, comparison: Dict[str, Dict[str, Any]]):
         """비교 결과 출력"""
@@ -317,18 +362,50 @@ class Experiment:
         print(f"   Model: {self.model.__class__.__name__}")
         print(f"{'='*70}\n")
 
-        # 평가 수행 (analysis.metrics 활용)
-        from ..analysis.metrics import evaluate_model
+        # 평가 수행
         import torch
+        import torch.nn as nn
+        import time
 
         device = self.training_strategy.device if hasattr(self.training_strategy, 'device') else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        results = evaluate_model(
-            model=self.model.model,  # 내부 nn.Module 전달
-            dataloader=test_loader,
-            class_names=class_names,
-            device=device
-        )
+        # 직접 평가 수행
+        self.model.model.eval()
+        self.model.model = self.model.model.to(device)
+
+        total_loss = 0
+        correct = 0
+        total = 0
+
+        criterion = nn.CrossEntropyLoss()
+
+        # 추론 시간 측정 시작
+        start_time = time.time()
+
+        with torch.no_grad():
+            for inputs, labels in test_loader:
+                inputs = inputs.to(device)
+                labels = labels.to(device)
+
+                outputs = self.model.model(inputs)
+                loss = criterion(outputs, labels)
+
+                total_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+        inference_time = time.time() - start_time
+        accuracy = correct / total
+        avg_loss = total_loss / len(test_loader)
+
+        results = {
+            'accuracy': accuracy,
+            'loss': avg_loss,
+            'inference_time': inference_time,
+            'total_samples': total,
+            'correct_predictions': correct
+        }
 
         # 모델 정보 추가
         model_info = self.model.get_model_info()

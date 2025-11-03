@@ -1,7 +1,21 @@
 """
-BaseModel: 모든 모델의 추상 베이스 클래스
+BaseModel: 전이학습 모델의 추상 베이스 클래스
+
 Template Method 패턴을 사용하여 공통 로직은 베이스에서 처리하고,
-모델별 차이는 서브클래스에서 구현
+모델별 차이는 서브클래스에서 구현합니다.
+
+주요 기능:
+    - 사전학습 모델 로드 및 분류기 수정
+    - Freeze 전략: feature_extraction, fine_tuning, inference
+    - 파라미터 관리: freeze/unfreeze 메서드
+    - 모델 정보 제공: get_model_info()
+
+사용 예시:
+    >>> from research.models.pretrained.resnet import ResNetModel
+    >>> model = ResNetModel(variant='resnet50', num_classes=10)
+    >>> model.freeze_backbone()  # Feature extraction
+    >>> model.unfreeze_all()     # Fine-tuning
+    >>> info = model.get_model_info()  # 모델 정보 확인
 """
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Iterator
@@ -13,10 +27,25 @@ class BaseModel(ABC):
     """
     모든 전이학습 모델의 베이스 클래스
 
-    서브클래스는 다음 메서드를 반드시 구현해야 함:
-    - _load_pretrained(): 사전학습 모델 로드
-    - _modify_classifier(): 분류기 레이어 수정
-    - get_backbone_params(): 백본 파라미터 반환
+    이 클래스는 Template Method 디자인 패턴을 구현하여
+    모든 전이학습 모델에 공통된 구조와 동작을 제공합니다.
+
+    Attributes:
+        num_classes (int): 출력 클래스 수
+        pretrained (bool): 사전학습 가중치 사용 여부
+        model (nn.Module): 실제 PyTorch 모델
+
+    Abstract Methods:
+        _load_pretrained(): 사전학습 모델 로드
+        _modify_classifier(): 분류기 레이어 수정
+        get_backbone_params(): 백본 파라미터 반환
+
+    Public Methods:
+        freeze_backbone(): 백본 동결 (feature extraction)
+        unfreeze_all(): 모든 레이어 해제 (fine-tuning)
+        freeze_all(): 모든 레이어 동결 (inference)
+        partial_unfreeze(): 일부 레이어만 해제
+        get_model_info(): 모델 정보 반환
     """
 
     def __init__(self, num_classes: int = 10, pretrained: bool = True):
@@ -158,6 +187,58 @@ class BaseModel(ABC):
         """학습 모드"""
         self.model.train()
         return self
+
+    def measure_inference_time(self, dataloader, device='cpu', num_batches=10):
+        """
+        모델의 추론 시간 측정
+
+        Args:
+            dataloader: 테스트 데이터 로더
+            device: 실행 디바이스
+            num_batches: 측정할 배치 수
+
+        Returns:
+            배치당 평균 추론 시간 (초)
+        """
+        import time
+        import torch
+
+        self.model.eval()
+        self.model = self.model.to(device)
+
+        # 워밍업
+        with torch.no_grad():
+            for inputs, _ in dataloader:
+                inputs = inputs.to(device)
+                _ = self.model(inputs)
+                break
+
+        # 실제 측정
+        total_time = 0
+        batch_count = 0
+
+        with torch.no_grad():
+            for inputs, _ in dataloader:
+                inputs = inputs.to(device)
+
+                # GPU 동기화
+                if torch.cuda.is_available() and device != 'cpu':
+                    torch.cuda.synchronize()
+
+                start_time = time.time()
+                _ = self.model(inputs)
+
+                # GPU 동기화
+                if torch.cuda.is_available() and device != 'cpu':
+                    torch.cuda.synchronize()
+
+                total_time += time.time() - start_time
+                batch_count += 1
+
+                if batch_count >= num_batches:
+                    break
+
+        return total_time / batch_count if batch_count > 0 else 0.0
 
     def state_dict(self):
         """모델 가중치 반환"""

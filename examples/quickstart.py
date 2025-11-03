@@ -1,211 +1,187 @@
 """
-KTB ML Framework - 빠른 시작 예제
+KTB ML Framework - 빠른 시작 가이드
 
 이 예제는 프레임워크의 전체 워크플로우를 보여줍니다:
-1. 메트릭 트래커 생성
-2. 간단한 학습 루프 시뮬레이션
-3. 실험 결과 기록
-4. 모델 비교
-5. 시각화 생성
+1. 데이터 준비
+2. 실험 설정
+3. 모델 학습
+4. 성능 평가
+5. 결과 시각화
+
+실행 방법:
+    $ python examples/quickstart.py
 """
 
-import torch
-import torch.nn as nn
-import numpy as np
+import sys
+from pathlib import Path
 
-print("="*70)
-print("KTB ML Framework - 빠른 시작 예제")
-print("="*70)
+# 프로젝트 루트를 Python 경로에 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Step 1: Import 필요한 컴포넌트
-print("\nStep 1: 필요한 컴포넌트 import...")
 from research import (
-    # 메트릭 시스템
-    MetricTracker,
-    AccuracyMetric,
-    F1ScoreMetric,
-
-    # 실험 관리
-    ExperimentRecorder,
-    ExperimentResult,
-
-    # 비교 시스템
-    ComparisonManager,
-    PerformanceComparator,
-    EfficiencyComparator,
-    SpeedComparator,
-
-    # 시각화
+    Experiment,
+    CIFAR10DataModule,
+    VanillaTrainingStrategy,
+    SimpleLoggingStrategy,
+    MultiClassStrategy,
     ExperimentVisualizer,
+    ExperimentRecorder
 )
-print("   [OK] Import 완료")
 
-# Step 2: 메트릭 트래커 생성
-print("\nStep 2: 메트릭 트래커 생성...")
-tracker = MetricTracker([
-    AccuracyMetric(),
-    F1ScoreMetric(average='macro')
-])
-print(f"   [OK] 메트릭 트래커 생성 완료 ({len(tracker.metrics)}개 메트릭)")
 
-# Step 3: 실험 시뮬레이션 (3개 모델)
-print("\nStep 3: 실험 시뮬레이션 (3개 모델)...")
-recorder = ExperimentRecorder()
+def main():
+    """메인 실행 함수"""
+    print("=" * 70)
+    print(" KTB ML Framework - Quick Start Example")
+    print("=" * 70)
+    print()
 
-models_config = [
-    {'name': 'Model_A', 'params': 5_000_000, 'hidden_size': 128},
-    {'name': 'Model_B', 'params': 10_000_000, 'hidden_size': 256},
-    {'name': 'Model_C', 'params': 2_500_000, 'hidden_size': 64},
-]
+    # ========================================================================
+    # 1. 데이터 준비
+    # ========================================================================
+    print("[Step 1] Preparing data...")
+    data_module = CIFAR10DataModule(
+        data_dir="./data",
+        batch_size=32,
+        num_workers=4,
+        image_size=224,
+        use_imagenet_norm=True  # 전이학습용 정규화
+    )
+    print("✓ CIFAR-10 data module created")
+    print()
 
-for model_config in models_config:
-    print(f"\n   모델: {model_config['name']}")
+    # ========================================================================
+    # 2. 실험 설정
+    # ========================================================================
+    print("[Step 2] Configuring experiment...")
+    config = {
+        'num_classes': 10,
+        'in_channels': 3,
+        'learning_rate': 1e-4,
+        'max_epochs': 2,  # 빠른 데모를 위해 2 에폭만
+        'batch_size': 32,
+        'optimizer': 'adam'
+    }
 
-    # 간단한 더미 모델 생성
-    model = nn.Sequential(
-        nn.Linear(784, model_config['hidden_size']),
-        nn.ReLU(),
-        nn.Linear(model_config['hidden_size'], 10)
+    exp = Experiment(config)
+    print("✓ Experiment configured")
+    print(f"  Config: {config}")
+    print()
+
+    # ========================================================================
+    # 3. 실험 환경 설정
+    # ========================================================================
+    print("[Step 3] Setting up experiment environment...")
+
+    # Task strategy (다중 분류)
+    task_strategy = MultiClassStrategy(num_classes=10)
+
+    # Training strategy
+    training_strategy = VanillaTrainingStrategy(
+        device=None,  # 자동 선택
+        task_strategy=task_strategy
     )
 
-    # 학습 시뮬레이션
-    num_epochs = 5
-    train_metrics_history = {'Accuracy': [], 'F1-Score (macro)': []}
-    val_metrics_history = {'Accuracy': [], 'F1-Score (macro)': []}
-    test_metrics_history = {'Accuracy': [], 'F1-Score (macro)': []}
+    # Logging strategy (옵션)
+    logging_strategy = SimpleLoggingStrategy()
 
-    train_loss_history = []
-    val_loss_history = []
-    test_loss_history = []
-    epoch_times = []
-
-    for epoch in range(num_epochs):
-        # 더미 데이터 생성
-        train_outputs = torch.randn(100, 10)
-        train_labels = torch.randint(0, 10, (100,))
-
-        val_outputs = torch.randn(50, 10)
-        val_labels = torch.randint(0, 10, (50,))
-
-        test_outputs = torch.randn(50, 10)
-        test_labels = torch.randint(0, 10, (50,))
-
-        # 메트릭 계산
-        train_metrics = {}
-        train_metrics['Accuracy'] = AccuracyMetric().calculate(train_outputs, train_labels)
-        train_metrics['F1-Score (macro)'] = F1ScoreMetric(average='macro').calculate(train_outputs, train_labels)
-
-        val_metrics = {}
-        val_metrics['Accuracy'] = AccuracyMetric().calculate(val_outputs, val_labels)
-        val_metrics['F1-Score (macro)'] = F1ScoreMetric(average='macro').calculate(val_outputs, val_labels)
-
-        test_metrics = {}
-        test_metrics['Accuracy'] = AccuracyMetric().calculate(test_outputs, test_labels)
-        test_metrics['F1-Score (macro)'] = F1ScoreMetric(average='macro').calculate(test_outputs, test_labels)
-
-        # 히스토리에 추가
-        for key in train_metrics:
-            train_metrics_history[key].append(train_metrics[key])
-            val_metrics_history[key].append(val_metrics[key])
-            test_metrics_history[key].append(test_metrics[key])
-
-        # 손실 (더미)
-        train_loss_history.append(1.5 - epoch * 0.2 + np.random.rand() * 0.1)
-        val_loss_history.append(1.6 - epoch * 0.18 + np.random.rand() * 0.1)
-        test_loss_history.append(1.65 - epoch * 0.15 + np.random.rand() * 0.1)
-
-        # 에폭 시간 (더미)
-        epoch_times.append(1.0 + np.random.rand() * 0.5)
-
-        print(f"     Epoch {epoch + 1}/{num_epochs} - "
-              f"Train Acc: {train_metrics['Accuracy']:.2f}%, "
-              f"Val Acc: {val_metrics['Accuracy']:.2f}%, "
-              f"Test Acc: {test_metrics['Accuracy']:.2f}%")
-
-    # 실험 결과 생성
-    result = ExperimentResult(
-        model_name=model_config['name'],
-        task_type='MultiClassStrategy',
-        train_loss=train_loss_history,
-        val_loss=val_loss_history,
-        test_loss=test_loss_history,
-        train_metrics=train_metrics_history,
-        val_metrics=val_metrics_history,
-        test_metrics=test_metrics_history,
-        primary_metric_name='Accuracy',
-        best_test_metric=max(test_metrics_history['Accuracy']),
-        parameters=model_config['params'],
-        epoch_times=epoch_times,
-        inference_time=0.01 + np.random.rand() * 0.05
+    exp.setup(
+        model_name='resnet18',  # 작은 모델로 빠른 테스트
+        data_module=data_module,
+        training_strategy=training_strategy,
+        logging_strategy=logging_strategy
     )
+    print("✓ Environment setup complete")
+    print()
 
-    # 기록기에 추가
-    recorder.add_result(result)
+    # ========================================================================
+    # 4. 단일 전략 실행 (Fine-tuning)
+    # ========================================================================
+    print("[Step 4] Running fine-tuning strategy...")
+    result = exp.run(strategy='fine_tuning', run_name='quickstart_demo')
 
-    print(f"     [OK] Best Test Accuracy: {result.best_test_metric:.2f}%")
+    print("\nResults:")
+    print(f"  Model Info:")
+    print(f"    - Total params: {result['model_info']['total_parameters']:,}")
+    print(f"    - Trainable params: {result['model_info']['trainable_parameters']:,}")
 
-print(f"\n   [OK] 총 {len(recorder.get_all_results())}개 모델 실험 완료")
+    if 'test_acc' in result['test_results']:
+        print(f"  Test Accuracy: {result['test_results']['test_acc']:.2f}%")
+    elif 'accuracy' in result['test_results']:
+        print(f"  Test Accuracy: {result['test_results']['accuracy']:.2f}%")
 
-# Step 4: 실험 결과 요약
-print("\nStep 4: 실험 결과 요약...")
-recorder.print_summary()
+    if 'training_time' in result['train_results']:
+        print(f"  Training Time: {result['train_results']['training_time']:.2f}s")
+    print()
 
-# Step 5: 모델 비교
-print("\nStep 5: 모델 비교...")
-manager = ComparisonManager()
+    # ========================================================================
+    # 5. 전략 비교 (옵션)
+    # ========================================================================
+    print("[Step 5] Comparing different strategies...")
+    comparison = exp.compare_strategies(
+        strategies=['feature_extraction', 'fine_tuning'],
+        reset_model=True
+    )
+    print()
 
-# 3가지 비교 방식 추가
-manager.add_comparator(PerformanceComparator('Accuracy', higher_better=True))
-manager.add_comparator(EfficiencyComparator('Accuracy'))
-manager.add_comparator(SpeedComparator())
+    # ========================================================================
+    # 6. 결과 시각화
+    # ========================================================================
+    print("[Step 6] Visualizing results...")
 
-# 모든 비교 실행
-comparison_results = manager.run_all_comparisons(recorder.get_all_results())
+    # ExperimentRecorder를 사용하여 결과 수집
+    recorder = ExperimentRecorder()
 
-# Step 6: 비교 리포트 저장
-print("\nStep 6: 비교 리포트 저장...")
-report_path = "quickstart_comparison_report.txt"
-manager.export_comparison_report(save_path=report_path)
-print(f"   [OK] 리포트 저장: {report_path}")
+    # 각 전략의 결과를 ExperimentResult 형식으로 변환
+    for strategy_name, strategy_result in comparison.items():
+        from research.experiment.result import ExperimentResult
 
-# Step 7: 시각화 생성
-print("\nStep 7: 시각화 생성...")
-visualization_path = "quickstart_visualization.png"
-ExperimentVisualizer.plot_comparison(
-    recorder=recorder,
-    save_path=visualization_path
-)
-print(f"   [OK] 시각화 저장: {visualization_path}")
+        # ExperimentResult 객체 생성
+        exp_result = ExperimentResult(
+            model_name=f"ResNet18_{strategy_name}",
+            task_type="MultiClass",
+            parameters=strategy_result['model_info']['total_parameters'],
+            train_metrics=strategy_result['train_results'].get('history', {}).get('train_acc', []),
+            val_metrics=strategy_result['train_results'].get('history', {}).get('val_acc', []),
+            test_metrics={'accuracy': [strategy_result['test_results'].get('test_acc', 0)]},
+            train_loss=strategy_result['train_results'].get('history', {}).get('train_loss', []),
+            val_loss=strategy_result['train_results'].get('history', {}).get('val_loss', []),
+            test_loss=[strategy_result['test_results'].get('test_loss', 0)],
+            epoch_times=strategy_result['train_results'].get('epoch_times', []),
+            inference_time=strategy_result['test_results'].get('inference_time', 0),
+            primary_metric_name='accuracy',
+            best_test_metric=strategy_result['test_results'].get('test_acc', 0),
+            final_overfitting_gap=0.0
+        )
 
-# Step 8: 최고 모델 찾기
-print("\nStep 8: 최고 모델 결정...")
-best_model_name = recorder.get_best_model('Accuracy', higher_better=True)
-best_result = recorder.get_result(best_model_name)
+        recorder.add_result(exp_result)
 
-print(f"""
-   [OK] 최고 성능 모델: {best_model_name}
-     - Test Accuracy: {best_result.best_test_metric:.2f}%
-     - Parameters: {best_result.parameters:,}
-     - Inference Time: {best_result.inference_time*1000:.2f}ms
-""")
+    # 시각화 생성
+    save_path = 'quickstart_comparison.png'
+    ExperimentVisualizer.plot_comparison(
+        recorder,
+        save_path=save_path
+    )
+    print(f"✓ Visualization saved to {save_path}")
+    print()
 
-# 요약
-print("="*70)
-print("[완료] 빠른 시작 예제 완료!")
-print("="*70)
-print("\n생성된 파일:")
-print(f"  - {report_path}")
-print(f"  - {visualization_path}")
-print("\n주요 단계:")
-print("  1. [OK] 메트릭 트래커 생성")
-print("  2. [OK] 3개 모델 학습 시뮬레이션")
-print("  3. [OK] 실험 결과 기록")
-print("  4. [OK] 모델 성능/효율성/속도 비교")
-print("  5. [OK] 시각화 생성")
-print("  6. [OK] 최고 모델 결정")
-print("\n다음 단계:")
-print("  - examples/test_*.py 파일들을 참고하여 각 기능 심화 학습")
-print("  - README.md의 API 문서 참고")
-print("  - 실제 데이터셋으로 전이학습 실험 진행")
-print("\nKTB ML Framework를 사용해주셔서 감사합니다!")
-print("="*70)
+    # ========================================================================
+    # 7. 실험 결과 저장
+    # ========================================================================
+    print("[Step 7] Saving experiment results...")
+    exp.save_results('quickstart_results.json')
+    print("✓ Results saved to quickstart_results.json")
+    print()
+
+    print("=" * 70)
+    print(" Quick Start Complete!")
+    print("=" * 70)
+    print("\n다음 단계:")
+    print("  1. config의 max_epochs를 늘려서 더 오래 학습해보세요")
+    print("  2. 다른 모델 (resnet50, vgg16 등)을 시도해보세요")
+    print("  3. learning_rate를 조정해보세요")
+    print("  4. WandBLoggingStrategy로 실험을 추적해보세요")
+
+
+if __name__ == "__main__":
+    main()

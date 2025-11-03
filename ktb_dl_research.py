@@ -25,7 +25,7 @@ if _SHOW_DEPRECATION_WARNING:
         "'from research import ...' 사용을 권장합니다. "
         "기존 코드는 계속 작동하지만, 향후 버전에서 제거될 수 있습니다.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
 
 # research 패키지의 모든 공개 API를 re-export
@@ -33,24 +33,19 @@ from research import (
     # Version info
     __version__,
     __author__,
-    
     # Core components
     Experiment,
     BaseModel,
     ModelRegistry,
-    
     # Pretrained Models
     ResNetModel,
     VGGModel,
-    
     # Data modules
     CIFAR10DataModule,
-    
     # Strategies
     VanillaTrainingStrategy,
     SimpleLoggingStrategy,
     WandBLoggingStrategy,
-    
     # Analysis tools
     ModelComparator,
     visualize_samples,
@@ -58,7 +53,6 @@ from research import (
     plot_comprehensive_comparison,
     plot_accuracy_improvement,
     calculate_metrics,
-    
     # Utility functions
     list_models,
     get_version,
@@ -66,35 +60,29 @@ from research import (
 
 __all__ = [
     # Version
-    '__version__',
-    '__author__',
-    
+    "__version__",
+    "__author__",
     # Core
-    'Experiment',
-    'BaseModel',
-    'ModelRegistry',
-    
+    "Experiment",
+    "BaseModel",
+    "ModelRegistry",
     # Models
-    'ResNetModel',
-    'VGGModel',
-    
+    "ResNetModel",
+    "VGGModel",
     # Data
-    'CIFAR10DataModule',
-    
+    "CIFAR10DataModule",
     # Strategies
-    'VanillaTrainingStrategy',
-    'SimpleLoggingStrategy',
-    'WandBLoggingStrategy',
-    
+    "VanillaTrainingStrategy",
+    "SimpleLoggingStrategy",
+    "WandBLoggingStrategy",
     # Analysis
-    'ModelComparator',
-    'visualize_samples',
-    'plot_confusion_matrix',
-    'plot_comprehensive_comparison',
-    'plot_accuracy_improvement',
-    'calculate_metrics',
-    
+    "ModelComparator",
+    "visualize_samples",
+    "plot_confusion_matrix",
+    "plot_comprehensive_comparison",
+    "plot_accuracy_improvement",
+    "calculate_metrics",
     # Functions
-    'list_models',
-    'get_version',
+    "list_models",
+    "get_version",
 ]

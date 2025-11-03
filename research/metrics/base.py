@@ -1,6 +1,7 @@
 """
-메트릭 계산 베이스 클래스
-Strategy Pattern: 다양한 메트릭을 지원하기 위한 전략 인터페이스
+Base classes for metrics
+
+Strategy Pattern: Supports various metrics through a common interface.
 """
 
 from abc import ABC, abstractmethod
@@ -8,63 +9,62 @@ import torch
 
 
 class MetricCalculator(ABC):
-    """
-    메트릭 계산 추상 클래스
+    """Base abstract class for metric calculation
 
-    OCP: 새로운 메트릭 추가 시 기존 코드 수정 불필요
-    SRP: 메트릭 계산만 담당
+    OCP: New metrics can be added without modifying existing code.
+    SRP: Responsible only for metric calculation.
     """
 
     @abstractmethod
     def calculate(self, outputs: torch.Tensor, labels: torch.Tensor) -> float:
-        """
-        메트릭 계산
+        """Calculate metric
 
         Args:
-            outputs: 모델 출력
-            labels: 정답 레이블
+            outputs: Model outputs
+            labels: Ground truth labels
 
         Returns:
-            계산된 메트릭 값
+            Calculated metric value
         """
         pass
 
     @abstractmethod
     def get_name(self) -> str:
-        """
-        메트릭 이름 반환
+        """Get metric name
 
         Returns:
-            메트릭 이름
+            Metric name
         """
         pass
 
     @property
     def name(self) -> str:
-        """
-        메트릭 이름 프로퍼티 (get_name()의 편의 래퍼)
+        """Metric name property (convenience wrapper for get_name())
 
         Returns:
-            메트릭 이름
+            Metric name
         """
         return self.get_name()
 
     @abstractmethod
     def is_higher_better(self) -> bool:
-        """
-        높을수록 좋은 메트릭인지 여부
+        """Check if higher values are better
 
         Returns:
-            True: 높을수록 좋음 (예: Accuracy)
-            False: 낮을수록 좋음 (예: Loss, MSE)
+            True: Higher is better (e.g., Accuracy)
+            False: Lower is better (e.g., Loss, MSE)
         """
         pass
 
     def get_display_format(self) -> str:
-        """
-        표시 형식 반환
+        """Get display format
 
         Returns:
-            포맷 문자열 (예: ".2f", ".4f")
+            Format string (e.g., ".2f", ".4f")
         """
         return ".2f"
+
+
+# BaseMetric is an alias for MetricCalculator
+# This provides a more intuitive name for the new API
+BaseMetric = MetricCalculator

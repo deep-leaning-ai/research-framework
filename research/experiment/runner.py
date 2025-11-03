@@ -13,7 +13,6 @@ from research.models.simple.base import BaseModel
 from research.strategies.task.base import TaskStrategy
 from research.metrics.base import MetricCalculator
 from research.metrics.tracker import MetricTracker
-from research.analysis import ModelAnalyzer, PerformanceMetrics
 from research.experiment.result import ExperimentResult
 from research.experiment.recorder import ExperimentRecorder
 
@@ -82,8 +81,8 @@ class ExperimentRunner:
         print(f"{'#'*70}\n")
 
         # 모델 분석
-        ModelAnalyzer.print_analysis(model)
-        param_count = ModelAnalyzer.count_parameters(model)
+        param_count = sum(p.numel() for p in model.parameters())
+        print(f"모델 파라미터 수: {param_count:,}")
 
         # 모델 학습 준비
         model = model.to(self.device)
@@ -121,6 +120,9 @@ class ExperimentRunner:
             # 테스트
             test_loss = self._evaluate(model, test_loader, criterion, test_tracker)
 
+            # GPU 동기화 (정확한 타이밍 측정)
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
             epoch_time = time.time() - start_time
 
             # 기록
@@ -154,9 +156,7 @@ class ExperimentRunner:
                 )
 
         # 추론 시간 측정
-        inference_time, _ = PerformanceMetrics.measure_inference_time(
-            model, test_loader, self.device
-        )
+        inference_time = self._measure_inference_time(model, test_loader)
 
         # 과적합 갭 계산 (분류 태스크만)
         final_overfitting_gap = None
@@ -164,9 +164,7 @@ class ExperimentRunner:
             train_final = train_tracker.get_latest().get(self.primary_metric.get_name())
             val_final = val_tracker.get_latest().get(self.primary_metric.get_name())
             if train_final is not None and val_final is not None:
-                final_overfitting_gap = PerformanceMetrics.calculate_overfitting_gap(
-                    train_final, val_final
-                )
+                final_overfitting_gap = train_final - val_final
 
         print(f"\n[DONE] 실험 완료!")
         print(
@@ -280,6 +278,57 @@ class ExperimentRunner:
 
         test_loss = running_loss / len(test_loader)
         return test_loss
+
+    def _measure_inference_time(
+        self,
+        model: nn.Module,
+        test_loader: DataLoader
+    ) -> float:
+        """모델 추론 시간 측정
+
+        Args:
+            model: 측정할 모델
+            test_loader: 테스트 데이터 로더
+
+        Returns:
+            배치당 평균 추론 시간 (초)
+        """
+        model.eval()
+
+        # 워밍업
+        with torch.no_grad():
+            for inputs, _ in test_loader:
+                inputs = inputs.to(self.device)
+                _ = model(inputs)
+                break
+
+        # 실제 측정
+        total_time = 0
+        num_batches = 0
+
+        with torch.no_grad():
+            for inputs, _ in test_loader:
+                inputs = inputs.to(self.device)
+
+                # GPU 동기화
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+
+                start_time = time.time()
+                _ = model(inputs)
+
+                # GPU 동기화
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+
+                total_time += time.time() - start_time
+                num_batches += 1
+
+                # 충분한 샘플 측정
+                if num_batches >= 10:
+                    break
+
+        return total_time / num_batches if num_batches > 0 else 0.0
 
     def _print_epoch_stats(
         self,
