@@ -4,270 +4,495 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-KTB ML Framework is a unified machine learning experimentation framework that integrates transfer learning (pretrained models like ResNet, VGG) with general ML tasks (multiclass, binary, regression). Built with SOLID principles and design patterns (Strategy, Factory, Template Method, Facade, Observer).
+**KTB ML Framework** (`research` package) is a unified machine learning experiment framework for transfer learning and general ML tasks. It merges functionality from two previous frameworks (ktb_dl_research and ml_framework) into a comprehensive, SOLID-principle-based architecture.
 
-**Package Name**: `research` (installed as `research`, legacy name was `ktb_dl_research`)
+Key characteristics:
+- No hardcoding philosophy: All configuration values defined as class constants
+- SOLID principles with Strategy Pattern, Template Method, Facade Pattern, and Dependency Injection
+- TDD approach with Given-When-Then pattern
+- Task-agnostic design supporting multiple ML tasks through strategy abstractions
 
-## Development Commands
+## Common Commands
 
-### Installation & Setup
-
+### Installation
 ```bash
-# Basic installation (development mode)
-pip install -e .
-
-# Install with all optional dependencies
-pip install -e ".[all]"
-
-# Install development dependencies only
-pip install -e ".[dev]"
+pip install -e .              # Editable install
+pip install -e ".[dev]"       # With dev dependencies
+pip install -e ".[all]"       # All optional dependencies
 ```
 
 ### Testing
-
 ```bash
-# Run all tests
-pytest tests/
-
-# Run unit tests only
-pytest tests/unit/
-
-# Run integration tests only
-pytest tests/integration/
-
-# Run specific test file
-pytest tests/unit/test_metrics.py
-
-# Run with verbose output
-pytest tests/ -v
-
-# Run with coverage report
-pytest tests/ --cov=research --cov-report=term-missing
-
-# Run tests by marker
-pytest tests/ -m unit
-pytest tests/ -m integration
-pytest tests/ -m slow
-pytest tests/ -m gpu
+pytest                        # Run all tests
+pytest -v                     # Verbose output
+pytest -m unit                # Only unit tests
+pytest -m "not slow"          # Skip slow tests
+pytest --cov=research         # With coverage report
 ```
 
 ### Code Quality
-
 ```bash
-# Format code with black
-black research/
-
-# Sort imports with isort
-isort research/
-
-# Lint with flake8
-flake8 research/
-
-# Type checking with mypy
-mypy research/
+black research tests --line-length 100    # Format code
+isort research tests --profile black      # Sort imports
+flake8 research                           # Lint
+mypy research                             # Type check
 ```
 
 ### Running Examples
-
 ```bash
-# Quick start example (full workflow)
-python3 examples/quickstart.py
-
-# Metric system test
-python3 examples/test_metric_system.py
-
-# Visualization test
-python3 examples/test_visualization.py
-
-# Task strategies test
-python3 examples/test_task_strategies.py
-
-# Comparison system test
-python3 examples/test_comparison_system.py
+python examples/quickstart.py                  # Quick start demo
+python examples/test_metric_system.py          # Metric system demo
+python examples/test_transfer_learning.py      # Transfer learning demo
 ```
 
-## Architecture Overview
+## Architecture
 
-### Package Structure
+### Module Organization
 
 ```
 research/
-├── core/              # Abstract base classes (BaseModel, Experiment)
-├── models/
-│   ├── pretrained/    # Transfer learning models (ResNet, VGG) + ModelRegistry
-│   └── simple/        # Simple models (CNN, FullyConnectedNN)
-├── strategies/
+├── core/              # Core abstractions (BaseModel, Experiment, base strategies)
+├── models/            # Model implementations
+│   ├── pretrained/    # Transfer learning models (ResNet, VGG) with ModelRegistry
+│   └── simple/        # Simple models (CNN, FullyConnected)
+├── strategies/        # Strategy Pattern implementations
 │   ├── training/      # Training strategies (VanillaTrainingStrategy)
 │   ├── logging/       # Logging strategies (Simple, WandB)
-│   ├── task/          # Task strategies (MultiClass, Binary, Regression)
-│   └── optimization/  # Future optimization strategies
-├── metrics/           # Metric system (MetricTracker, individual metrics)
-├── experiment/        # Experiment management (Runner, Recorder, Result)
-├── comparison/        # Model comparison (Performance, Efficiency, Speed comparators)
-├── visualization/     # Visualization tools (8-panel charts, confusion matrix)
-├── analysis/          # Analysis tools (legacy + new analyzers)
+│   └── task/          # Task strategies (MultiClass, Binary, Regression)
+├── metrics/           # Metric calculators (Classification, Regression) + MetricTracker
+├── experiment/        # ExperimentRunner, ExperimentResult, ExperimentRecorder
+├── comparison/        # Model comparison system (comparators + ComparisonManager)
+├── visualization/     # ExperimentVisualizer with 8-panel charts
 ├── data/              # Data modules (CIFAR10DataModule, DataLoaderFactory)
-├── utils/             # Utility functions
-└── compat/            # Backward compatibility layer
+└── config/            # Configuration classes using dataclasses
 ```
 
 ### Key Design Patterns
 
-1. **Strategy Pattern**: Used extensively for task strategies, training strategies, logging strategies, and comparators. New strategies can be added without modifying existing code.
+1. **Template Method Pattern**: `BaseModel` defines common flow (setup_model, forward, train_step, etc.), subclasses implement specific details
+2. **Strategy Pattern**: Used for tasks (loss/activation/metrics per task type), training, logging, metrics, and comparison
+3. **Facade Pattern**: `Experiment` class provides simple API hiding complex orchestration
+4. **Registry Pattern**: `ModelRegistry` for pretrained model management with automatic registration
+5. **Dependency Injection**: Components depend on abstractions (base classes), not concrete implementations
 
-2. **Factory + Registry Pattern**: `ModelRegistry` uses decorators to automatically register pretrained models. Models are created via `ModelRegistry.create(model_name, ...)`.
+### Key Abstractions
 
-3. **Template Method Pattern**: `BaseModel` provides the template for transfer learning models. Subclasses implement `_load_pretrained()`, `_modify_classifier()`, and `get_backbone_params()`.
+1. **TaskStrategy**: Defines loss function, activation, and metric calculation per task type
+   - `MultiClassStrategy` (CrossEntropyLoss, no activation for logits)
+   - `BinaryClassificationStrategy` (BCELoss, Sigmoid)
+   - `RegressionStrategy` (MSELoss, no activation)
 
-4. **Facade Pattern**: `Experiment` class provides a simplified interface for complex workflows (setup, training, comparison).
+2. **MetricCalculator**: Base for all metrics with `calculate()`, `get_name()`, `is_higher_better()`
+   - Classification: Accuracy, Precision, Recall, F1Score, Top5Accuracy, AUC
+   - Regression: MSE, MAE, R2
 
-5. **Observer Pattern**: `ExperimentRecorder` automatically collects and manages experiment results.
+3. **TrainingStrategy**: Handles training loop execution
+   - `VanillaTrainingStrategy` (basic training with validation)
 
-### Core Components
+4. **LoggingStrategy**: Handles experiment tracking
+   - `SimpleLoggingStrategy` (console output)
+   - `WandBLoggingStrategy` (Weights & Biases integration)
 
-**Transfer Learning System**:
-- Supports ResNet (18/34/50/101/152) and VGG (11/13/16/19 + BN variants)
-- Three modes: `feature_extraction` (freeze backbone), `fine_tuning` (train all), `inference` (eval only)
-- Methods: `freeze_backbone()`, `unfreeze_all()`, `freeze_all()`, `partial_unfreeze()`
+### Core Workflow
 
-**Task Strategies**:
-- `MultiClassStrategy`: CrossEntropyLoss, Softmax activation, accuracy metric
-- `BinaryClassificationStrategy`: BCEWithLogitsLoss, Sigmoid activation
-- `RegressionStrategy`: MSELoss, no activation function
-
-**Metrics System**:
-- `MetricTracker`: Manages multiple metrics simultaneously with history tracking
-- Classification: AccuracyMetric, PrecisionMetric, RecallMetric, F1ScoreMetric
-- Regression: MSEMetric, MAEMetric, R2Metric
-- Custom metrics: Inherit from `BaseMetric` and implement `calculate(predictions, targets)`
-
-**Comparison System**:
-- `PerformanceComparator`: Ranks by metric values
-- `EfficiencyComparator`: Ranks by parameter efficiency (performance / log10(params))
-- `SpeedComparator`: Compares training and inference speed
-- `ComparisonManager`: Orchestrates multiple comparators and generates reports
-
-**Visualization**:
-- `ExperimentVisualizer.plot_comparison()`: Creates 8-panel comprehensive charts
-- Includes: train/val loss, test loss, metric comparison, best performance, efficiency scatter, epoch time, inference time, overfitting gap
-- Legacy functions: `visualize_samples()`, `plot_confusion_matrix()`, `plot_comprehensive_comparison()`, `plot_accuracy_improvement()`
-
-### Main Entry Points
-
-The package exports a unified API through `research/__init__.py`. All imports use defensive try-except blocks to prevent import failures.
-
-Main classes to use:
-- `Experiment`: High-level experiment orchestration
-- `ExperimentRunner`: Lower-level experiment execution
-- `ExperimentRecorder`: Collects and manages multiple experiment results
-- `MetricTracker`: Tracks multiple metrics during training
-- `ComparisonManager`: Compares models across different dimensions
-
-## Common Development Tasks
-
-### Adding a New Pretrained Model
-
-1. Create model class in `research/models/pretrained/`
-2. Inherit from `BaseModel`
-3. Implement: `_load_pretrained()`, `_modify_classifier()`, `get_backbone_params()`
-4. Register with decorator: `@ModelRegistry.register('model_name', variant='model_variant')`
-
-### Adding a New Metric
-
-1. Create metric class in `research/metrics/classification.py` or `regression.py`
-2. Inherit from `BaseMetric` (from `research/metrics/base.py`)
-3. Implement `calculate(self, predictions, targets)` method
-4. Add to relevant exports in `research/metrics/__init__.py`
-
-### Adding a New Task Strategy
-
-1. Create strategy in `research/strategies/task/`
-2. Inherit from `TaskStrategy`
-3. Implement: `get_criterion()`, `calculate_metric()`, `prepare_labels()`
-4. Add to exports in `research/strategies/task/__init__.py`
-
-### Adding a New Comparator
-
-1. Create comparator in `research/comparison/`
-2. Inherit from `ModelComparator` (define in base.py or use existing interface)
-3. Implement: `get_comparison_name()`, `compare(results)`
-4. Add to exports in `research/comparison/__init__.py`
-
-## Testing Guidelines
-
-- All tests use pytest framework
-- Fixtures defined in `tests/conftest.py` include: device, dummy data for all task types, metric trackers, experiment results
-- Use markers: `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.slow`, `@pytest.mark.gpu`
-- Tests should be fast and deterministic (use `seed_everything` fixture)
-- Coverage target: aim for high coverage on core modules
-
-## Important Notes
-
-### Backward Compatibility
-
-- The package maintains 100% backward compatibility with legacy `ktb_dl_research` API
-- Legacy wrapper available in `ktb_dl_research.py` at project root
-- All original APIs are re-exported through `research/__init__.py`
-
-### Defensive Imports
-
-- All imports in `__init__.py` use try-except blocks
-- Missing dependencies won't crash the entire package
-- Only successfully imported modules appear in `__all__`
-
-### Code Style
-
-- Black formatter with 100-character line length
-- isort with black profile
-- Type hints preferred but not strictly enforced
-- Docstrings in Google style
-
-### GPU Usage
-
-- Framework automatically detects GPU availability
-- Explicit device specification: `VanillaTrainingStrategy(device='cuda')`
-- All strategies handle CPU/GPU seamlessly
-
-### Input Channels
-
-- Default: 3 channels (RGB images)
-- For 1-channel data (grayscale, mel-spectrograms): set `in_channels: 1` in config
-- Framework automatically adapts first convolutional layer
-- For pretrained models with 1 channel: RGB weights are averaged to single channel
-
-**Example for 1-channel data:**
 ```python
-config = {
-    'num_classes': 10,
-    'in_channels': 1,  # For mel-spectrograms or grayscale
-    'learning_rate': 1e-4,
-    'max_epochs': 20
-}
+# 1. Configure
+config = {'num_classes': 10, 'learning_rate': 1e-4, 'max_epochs': 2}
 exp = Experiment(config)
-exp.setup(model_name='resnet18', data_module=mel_dm, ...)
+
+# 2. Setup
+exp.setup(
+    model_name='resnet18',
+    data_module=CIFAR10DataModule(),
+    training_strategy=VanillaTrainingStrategy(task_strategy=MultiClassStrategy()),
+    logging_strategy=SimpleLoggingStrategy()
+)
+
+# 3. Run single strategy
+result = exp.run(strategy='fine_tuning', run_name='demo')
+
+# 4. Compare strategies
+comparison = exp.compare_strategies(['feature_extraction', 'fine_tuning'])
+
+# 5. Visualize
+ExperimentVisualizer.plot_comparison(recorder, save_path='comparison.png')
 ```
 
-## Typical Workflow
+### Transfer Learning Strategies
 
-1. Create data module (e.g., `CIFAR10DataModule`) or custom DataLoader
-2. Define config dict with hyperparameters (including `in_channels` if not RGB)
-3. Create `Experiment` instance and call `setup()` with model, strategies
-4. Run experiment with `exp.run(strategy='fine_tuning')` or compare with `exp.compare_strategies(['feature_extraction', 'fine_tuning'])`
-5. Use `ExperimentRecorder` to collect results from multiple experiments
-6. Generate visualizations with `ExperimentVisualizer.plot_comparison()`
-7. Compare models with `ComparisonManager`
+- `feature_extraction`: Freeze backbone, train only classifier
+- `fine_tuning`: Unfreeze all layers for full training
+- `inference`: Freeze all layers for evaluation only
 
-## Version Information
+## Testing Conventions
 
-- Current version: 0.1.0
-- Python compatibility: 3.8+
-- Main dependencies: PyTorch 2.0+, torchvision, numpy, matplotlib, scikit-learn, pandas
-- Optional: wandb (for WandB logging), jupyter (for notebooks)
+### Test Organization
+- `tests/conftest.py`: Comprehensive fixtures with TDD constants (PERFECT_ACCURACY, NUM_SAMPLES, etc.)
+- `tests/unit/`: 14 unit test files covering all modules
+- `tests/integration/`: End-to-end integration tests
 
-## Additional Documentation
+### Pytest Markers
+Use markers to filter tests:
+- `@pytest.mark.unit`: Unit tests
+- `@pytest.mark.integration`: Integration tests
+- `@pytest.mark.slow`: Slow-running tests (skip with `-m "not slow"`)
+- `@pytest.mark.gpu`: GPU-required tests
 
-- README.md: Project overview and quick start
-- QUICKSTART.md: 5-minute tutorial
-- ARCHITECTURE.md: Detailed architecture and design patterns
-- examples/README.md: Example code descriptions
-- research/visualization/VISUALIZATION_FEATURES.md: Visualization API specification
+### Test Pattern
+Follow Given-When-Then pattern:
+```python
+def test_metric_calculation(perfect_predictions, imperfect_predictions):
+    # Given
+    calculator = AccuracyCalculator()
+
+    # When
+    accuracy = calculator.calculate(perfect_predictions, perfect_predictions)
+
+    # Then
+    assert accuracy == PERFECT_ACCURACY
+```
+
+All test constants defined in conftest.py fixtures, no hardcoded values in tests.
+
+## Important Architectural Decisions
+
+1. **Defensive Imports**: All imports in `__init__.py` wrapped in try-except to prevent package-wide import failures if optional dependencies missing
+
+2. **No Hardcoding**: All magic numbers, thresholds, and configuration values defined as class constants (e.g., `DEFAULT_LEARNING_RATE`, `NUM_CLASSES`)
+
+3. **Multi-channel Support**: Models support both 1-channel inputs (grayscale/mel-spectrogram) and 3-channel inputs (RGB) through dynamic channel adaptation
+
+4. **Backwards Compatibility**: Maintains API compatibility with original ktb_dl_research framework
+
+5. **Strategy Composition**: Task strategies compose with training strategies, allowing flexible experiment configurations without class explosion
+
+## Implemented Features Index
+
+This section maps user intentions to specific code locations for quick reference when requesting implementations or modifications.
+
+### 1. Data Loading & Processing
+
+**CIFAR10 Data Module**
+- File: `research/data/cifar10.py`
+- Class: `CIFAR10DataModule`
+- Key Methods: `prepare_data()`, `setup()`, `train_dataloader()`, `val_dataloader()`, `test_dataloader()`, `get_class_names()`
+- Features: ImageNet/CIFAR-10 normalization, automatic train/val split (80/20), persistent workers optimization
+
+**Data Loader Factory**
+- File: `research/data/loaders.py`
+- Class: `DataLoaderFactory`
+- Key Method: `create_loaders()` (static)
+- Features: Custom dataset support, configurable train_ratio, automatic splitting, reproducible random seed
+
+### 2. Models
+
+**Pretrained Models (ResNet)**
+- File: `research/models/pretrained/resnet.py`
+- Class: `ResNetModel`
+- Variants: resnet18, resnet34, resnet50, resnet101, resnet152
+- Key Methods: `freeze_backbone()`, `unfreeze_all()`, `freeze_until_layer()`, `get_layer_groups()`
+- Features: Multi-channel input support (1, 3, 4 channels), automatic weight averaging for grayscale
+
+**Pretrained Models (VGG)**
+- File: `research/models/pretrained/vgg.py`
+- Class: `VGGModel`
+- Variants: vgg11, vgg11_bn, vgg13, vgg13_bn, vgg16, vgg16_bn, vgg19, vgg19_bn
+- Key Methods: `freeze_features()`, `unfreeze_classifier_only()`, `partial_unfreeze_features()`, `get_architecture_info()`
+- Features: Block-wise unfreezing, multi-channel input support
+
+**Model Registry**
+- File: `research/models/pretrained/registry.py`
+- Class: `ModelRegistry`
+- Key Methods: `register()` (decorator), `create()`, `list_models()`, `is_registered()`, `get_model_info()`
+- Registered Models: 13 total (5 ResNet + 8 VGG variants)
+
+**Simple Models**
+- CNN: `research/models/simple/cnn.py` - For MNIST-like 28x28 images (2 Conv + AvgPool + FC)
+- FullyConnectedNN: `research/models/simple/fully_connected.py` - 3 FC layers with configurable hidden size
+
+### 3. Training Strategies
+
+**Vanilla Training**
+- File: `research/strategies/training/vanilla_strategy.py`
+- Class: `VanillaTrainingStrategy`
+- Key Methods: `train()`, `evaluate()`
+- Features: Task-agnostic, optimizer support (Adam/AdamW/SGD), learning rate scheduling (ReduceLROnPlateau), early stopping, gradient clipping
+
+**Transfer Learning Modes** (via Experiment facade)
+- `feature_extraction`: Freeze backbone, train classifier only
+- `fine_tuning`: Train entire network
+- `inference`: Freeze all, evaluation only
+
+### 4. Task Strategies
+
+All in `research/strategies/task/task_strategies.py`:
+
+- **MultiClassStrategy**: CrossEntropyLoss, Softmax, Accuracy metric
+- **BinaryClassificationStrategy**: BCEWithLogitsLoss, Sigmoid, Accuracy (threshold=0.5)
+- **RegressionStrategy**: MSELoss, no activation, MSE metric
+
+### 5. Metrics
+
+**Classification Metrics** (`research/metrics/classification.py`)
+- `AccuracyMetric`: Proportion of correct predictions
+- `PrecisionMetric`: True positives / positive predictions (supports macro/micro/weighted/binary)
+- `RecallMetric`: True positives / actual positives (supports averaging)
+- `F1ScoreMetric`: Harmonic mean of precision and recall (supports averaging)
+- `Top5AccuracyMetric`: Correct class in top-5 predictions
+- `AUCMetric`: Area under ROC curve (binary classification)
+
+**Regression Metrics** (`research/metrics/regression.py`)
+- `MSEMetric`: Mean Squared Error
+- `MAEMetric`: Mean Absolute Error
+- `R2Metric`: R-squared (coefficient of determination)
+
+**Metric Tracking**
+- File: `research/metrics/tracker.py`
+- Class: `MetricTracker`
+- Key Methods: `update()`, `get_latest()`, `get_best()`, `get_history()`, `get_moving_average()`, `summary()`, `reset()`
+- Features: Multiple metrics tracking, moving averages (window_size=10)
+
+### 6. Logging Strategies
+
+**Simple Logging**
+- File: `research/strategies/logging/simple_strategy.py`
+- Class: `SimpleLoggingStrategy`
+- Features: Console output, no dependencies
+
+**Weights & Biases Logging**
+- File: `research/strategies/logging/wandb_strategy.py`
+- Class: `WandBLoggingStrategy`
+- Features: WandB integration, automatic fallback if not installed
+
+Both implement: `init_run()`, `log_metrics()`, `log_hyperparams()`, `log_artifact()`, `finish()`, `get_history()`
+
+### 7. Experiment Management
+
+**Experiment Facade**
+- File: `research/core/experiment.py`
+- Class: `Experiment`
+- Key Methods: `setup()`, `run()`, `compare_strategies()`, `evaluate_pretrained()`, `get_history()`, `save_results()`
+- Features: Model state management, automatic reset, history tracking
+
+**Experiment Runner**
+- File: `research/experiment/runner.py`
+- Class: `ExperimentRunner`
+- Key Methods: `run_single_experiment()`, `run_multiple_experiments()`, `get_recorder()`
+- Features: Task-agnostic design, metric tracking, inference time measurement, overfitting gap calculation
+
+**Experiment Recorder**
+- File: `research/experiment/recorder.py`
+- Class: `ExperimentRecorder`
+- Key Methods: `add_result()`, `get_result()`, `get_all_results()`, `print_summary()`, `save_to_file()`, `get_best_model()`
+- Features: Memory management (max 100 results), version control, auto-save every 10 results
+
+**Experiment Result**
+- File: `research/experiment/result.py`
+- Class: `ExperimentResult` (dataclass)
+- Attributes: model_name, task_type, parameters, train/val/test metrics and losses, epoch_times, inference_time, primary_metric_name
+- Key Methods: `get_final_train_metric()`, `get_final_val_metric()`, `get_final_test_metric()`, `get_best_test_metric_for()`, `summary()`
+
+### 8. Comparison & Analysis
+
+**Comparators** (`research/comparison/comparators.py`)
+- `PerformanceComparator`: Ranks by metric performance
+- `EfficiencyComparator`: Calculates performance / log10(parameters) ratio
+- `SpeedComparator`: Compares inference and training time
+
+**Comparison Manager**
+- File: `research/comparison/manager.py`
+- Class: `ComparisonManager`
+- Key Methods: `add_comparator()`, `compare()`, `run_all_comparisons()`, `export_comparison_report()`, `generate_report()`, `print_summary()`
+- Features: Multiple comparator orchestration, automatic report generation
+
+### 9. Visualization
+
+**Experiment Visualizer**
+- File: `research/visualization/visualizer.py`
+- Class: `ExperimentVisualizer`
+- Key Methods: `plot_comparison()` (8-panel), `plot_metric_comparison()` (2-panel)
+- Features: Dynamic color generation for 20+ models, high-resolution output (300 DPI)
+
+**Available Chart Types:**
+1. Training Progress (Train vs Val Loss)
+2. Final Test Performance (Test Loss)
+3. Primary Metric Comparison (Train/Val/Test)
+4. Best Performance Bar Chart
+5. Parameter Efficiency Scatter Plot
+6. Average Training Time per Epoch
+7. Average Inference Time
+8. Overfitting Gap (Train-Val difference)
+
+### 10. Configuration
+
+**Config Classes** (all using dataclasses)
+- `ModelConfig`: `research/config/model.py` - num_classes, in_channels, device
+- `TrainingConfig`: `research/config/training.py` - learning_rate, max_epochs, batch_size, optimizer
+- `ExperimentConfig`: `research/config/experiment.py` - Combines ModelConfig + TrainingConfig, has `from_dict()` and `to_dict()`
+
+## Quick Reference
+
+### When you want to...
+
+**Load CIFAR-10 data:**
+```python
+from research.data.cifar10 import CIFAR10DataModule
+dm = CIFAR10DataModule(data_dir='./data', batch_size=32)
+dm.prepare_data()
+dm.setup()
+```
+
+**Load custom data:**
+```python
+from research.data.loaders import DataLoaderFactory
+train_loader, val_loader, test_loader = DataLoaderFactory.create_loaders(
+    train_dataset=your_train_dataset,
+    test_dataset=your_test_dataset,
+    batch_size=32
+)
+```
+
+**Create a pretrained model:**
+```python
+from research.models.pretrained.registry import ModelRegistry
+# List available models
+models = ModelRegistry.list_models()  # ['resnet18', 'resnet34', ..., 'vgg19_bn']
+# Create model
+model = ModelRegistry.create('resnet50', num_classes=10)
+```
+
+**Create a simple model:**
+```python
+from research.models.simple.cnn import CNN
+from research.models.simple.fully_connected import FullyConnectedNN
+
+cnn = CNN(output_dim=10)  # For MNIST-like tasks
+fcnn = FullyConnectedNN(input_dim=784, hidden_dim=128, output_dim=10)
+```
+
+**Setup a training strategy:**
+```python
+from research.strategies.training.vanilla_strategy import VanillaTrainingStrategy
+from research.strategies.task.task_strategies import MultiClassStrategy
+
+task_strategy = MultiClassStrategy(num_classes=10)
+training_strategy = VanillaTrainingStrategy(
+    task_strategy=task_strategy,
+    optimizer_name='adam',
+    learning_rate=1e-4,
+    use_scheduler=True,
+    early_stopping_patience=5
+)
+```
+
+**Run an experiment (easy way):**
+```python
+from research.core.experiment import Experiment
+
+config = {'num_classes': 10, 'learning_rate': 1e-4, 'max_epochs': 10}
+exp = Experiment(config)
+exp.setup(
+    model_name='resnet18',
+    data_module=CIFAR10DataModule(),
+    training_strategy=training_strategy,
+    logging_strategy=SimpleLoggingStrategy()
+)
+
+# Run single strategy
+result = exp.run(strategy='fine_tuning', run_name='my_experiment')
+
+# Compare multiple strategies
+comparison = exp.compare_strategies(['feature_extraction', 'fine_tuning'])
+```
+
+**Run experiment (advanced way):**
+```python
+from research.experiment.runner import ExperimentRunner
+
+runner = ExperimentRunner(training_strategy=training_strategy, logging_strategy=logging_strategy)
+result = runner.run_single_experiment(
+    model=model,
+    data_module=data_module,
+    config=config,
+    experiment_name='my_experiment'
+)
+```
+
+**Compare models:**
+```python
+from research.comparison.manager import ComparisonManager
+from research.comparison.comparators import PerformanceComparator, EfficiencyComparator
+
+manager = ComparisonManager()
+manager.add_comparator(PerformanceComparator(metric_name='accuracy', higher_better=True))
+manager.add_comparator(EfficiencyComparator(metric_name='accuracy'))
+
+# Compare all experiments
+comparison_results = manager.run_all_comparisons(experiment_results)
+manager.print_summary()
+```
+
+**Visualize results:**
+```python
+from research.visualization.visualizer import ExperimentVisualizer
+
+# 8-panel comprehensive comparison
+ExperimentVisualizer.plot_comparison(
+    recorder=recorder,
+    save_path='comparison.png',
+    primary_metric='accuracy'
+)
+
+# Focused 2-panel metric comparison
+ExperimentVisualizer.plot_metric_comparison(
+    recorder=recorder,
+    metric_name='accuracy',
+    save_path='accuracy_comparison.png'
+)
+```
+
+**Track custom metrics:**
+```python
+from research.metrics.tracker import MetricTracker
+from research.metrics.classification import AccuracyMetric, F1ScoreMetric
+
+tracker = MetricTracker(['accuracy', 'f1_score'])
+metrics = {
+    'accuracy': AccuracyMetric(),
+    'f1_score': F1ScoreMetric(average='weighted')
+}
+
+# During training loop
+tracker.update(predictions, targets, metrics)
+latest = tracker.get_latest()
+best = tracker.get_best('accuracy')
+summary = tracker.summary()
+```
+
+**Use different task types:**
+```python
+from research.strategies.task.task_strategies import (
+    MultiClassStrategy,
+    BinaryClassificationStrategy,
+    RegressionStrategy
+)
+
+# Multi-class classification (e.g., CIFAR-10)
+task = MultiClassStrategy(num_classes=10)
+
+# Binary classification
+task = BinaryClassificationStrategy()
+
+# Regression
+task = RegressionStrategy()
+```
+
+## Development Guidelines
+
+- No emojis in code or comments
+- Use TDD with Given-When-Then pattern for all tests
+- Define all configuration values as class constants, never hardcode
+- Follow SOLID principles when extending functionality
+- Add type hints for better IDE support
+- Write comprehensive docstrings with usage examples
+- Use defensive programming with input validation
